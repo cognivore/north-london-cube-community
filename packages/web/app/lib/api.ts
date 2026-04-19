@@ -4,6 +4,9 @@
 
 const API_BASE = typeof window !== "undefined" ? "" : `http://localhost:${process.env.API_PORT ?? "37556"}`;
 
+/** Server-side API base URL — import this instead of defining your own. */
+export const SERVER_API_BASE = API_BASE;
+
 type ApiResult<T> = { ok: true; data: T } | { ok: false; error: { code: string; message: string } };
 
 type ApiResultWithHeaders<T> = { ok: true; data: T; headers: Headers } | { ok: false; error: { code: string; message: string } };

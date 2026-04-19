@@ -1,5 +1,5 @@
 import { Form, useLoaderData, useActionData, Link } from "react-router";
-import { api, cookieHeader } from "../../../lib/api";
+import { api, cookieHeader, SERVER_API_BASE } from "../../../lib/api";
 
 export async function loader({ request, params }: { request: Request; params: { fridayId: string } }) {
   const ch = { headers: cookieHeader(request) };
@@ -14,7 +14,7 @@ export async function loader({ request, params }: { request: Request; params: { 
   const user = meResult.ok ? meResult.data.user : null;
   let coveredCount = 0;
   if (user?.role === "coordinator") {
-    const API_BASE = `http://localhost:${process.env.API_PORT ?? "37556"}`;
+    const API_BASE = SERVER_API_BASE;
     try {
       const res = await fetch(`${API_BASE}/api/fridays/${params.fridayId}/covered-count`, {
         headers: cookieHeader(request),
@@ -77,7 +77,7 @@ export async function action({ request, params }: { request: Request; params: { 
   }
 
   if (intent === "advance") {
-    const API_BASE = `http://localhost:${process.env.API_PORT ?? "37556"}`;
+    const API_BASE = SERVER_API_BASE;
     const res = await fetch(`${API_BASE}/api/lifecycle/fridays/${params.fridayId}/advance`, {
       method: "POST",
       headers: { "Content-Type": "application/json", ...cookieHeader(request) },

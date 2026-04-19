@@ -1,8 +1,8 @@
 import { Form, Link, useLoaderData, useActionData } from "react-router";
 import { Icon } from "../../components/Icon";
-import { api, cookieHeader } from "../../lib/api";
+import { api, cookieHeader, SERVER_API_BASE } from "../../lib/api";
 
-const API_BASE = `http://localhost:${process.env.API_PORT ?? "37556"}`;
+const API_BASE = SERVER_API_BASE;
 
 export async function loader({ request }: { request: Request }) {
   const ch = { headers: cookieHeader(request) };

@@ -1,6 +1,6 @@
 import { Link, Outlet, useLoaderData, redirect } from "react-router";
 import { Icon } from "../../components/Icon";
-import { api, cookieHeader } from "../../lib/api";
+import { api, cookieHeader, SERVER_API_BASE } from "../../lib/api";
 
 export async function loader({ request }: { request: Request }) {
   const ch = { headers: cookieHeader(request) };
@@ -25,7 +25,7 @@ export async function loader({ request }: { request: Request }) {
   }
 
   // Check if TEST_MODE is enabled
-  const API_BASE = `http://localhost:${process.env.API_PORT ?? "37556"}`;
+  const API_BASE = SERVER_API_BASE;
   let testMode = false;
   try {
     const testRes = await fetch(`${API_BASE}/api/test/users`);
