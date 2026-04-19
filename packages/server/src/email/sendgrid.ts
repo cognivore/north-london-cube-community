@@ -6,6 +6,8 @@ const SENDGRID_API_KEY = process.env.SENDGRID_API_KEY ?? "";
 const FROM_EMAIL = process.env.FROM_EMAIL ?? "noreply@cube.london";
 const FROM_NAME = process.env.FROM_NAME ?? "North London Cube Community";
 const APP_URL = process.env.APP_URL ?? "https://north.cube.london";
+const TEST_MODE = process.env.TEST_MODE === "true";
+const TEST_REDIRECT_EMAIL = "jm@memorici.de";
 
 export async function sendMagicLinkEmail(
   to: string,
@@ -13,6 +15,7 @@ export async function sendMagicLinkEmail(
   userId: string,
 ): Promise<void> {
   const magicLink = `${APP_URL}/auth/verify?userId=${userId}&token=${token}`;
+  const actualTo = TEST_MODE ? TEST_REDIRECT_EMAIL : to;
 
   const res = await fetch("https://api.sendgrid.com/v3/mail/send", {
     method: "POST",
@@ -21,7 +24,7 @@ export async function sendMagicLinkEmail(
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      personalizations: [{ to: [{ email: to }] }],
+      personalizations: [{ to: [{ email: actualTo }] }],
       from: { email: FROM_EMAIL, name: FROM_NAME },
       subject: "Sign in to North London Cube Community",
       content: [

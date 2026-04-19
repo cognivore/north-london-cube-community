@@ -318,9 +318,9 @@ function sendConfirmationEmail(userId: string, fridayId: string) {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          personalizations: [{ to: [{ email: user[0].email }] }],
+          personalizations: [{ to: [{ email: process.env.TEST_MODE === "true" ? "jm@memorici.de" : user[0].email }] }],
           from: { email: FROM_EMAIL, name: "North London Cube Community" },
-          subject: `You're confirmed for ${friday[0].date}`,
+          subject: `${process.env.TEST_MODE === "true" ? "[TEST] " : ""}You're confirmed for ${friday[0].date}`,
           content: [{
             type: "text/plain",
             value: `Hi ${user[0].display_name},\n\nYou're confirmed for Friday ${friday[0].date} at Hitchhiker & Owl.\n\nDoors 18:30, P1P1 18:45. Your RSVP will lock in 30 minutes.\n\nIf you can't make it, withdraw now at https://north.cube.london\n\n— Cubehall`,
@@ -360,9 +360,9 @@ function notifyCoordinatorsCovered(fridayId: string) {
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            personalizations: [{ to: [{ email: coord.email }] }],
+            personalizations: [{ to: [{ email: process.env.TEST_MODE === "true" ? "jm@memorici.de" : coord.email }] }],
             from: { email: FROM_EMAIL, name: "Cubehall" },
-            subject: `${coveredCount} covered RSVP${coveredCount !== 1 ? "s" : ""} for ${date}`,
+            subject: `${process.env.TEST_MODE === "true" ? "[TEST] " : ""}${coveredCount} covered RSVP${coveredCount !== 1 ? "s" : ""} for ${date}`,
             content: [{
               type: "text/plain",
               value: `${coveredCount} attendee${coveredCount !== 1 ? "s" : ""} for ${date} need${coveredCount === 1 ? "s" : ""} entry covered.\n\nDefault: split evenly among other attendees.\nNo names shown — anonymous.`,
