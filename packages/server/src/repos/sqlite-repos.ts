@@ -710,7 +710,7 @@ const RsvpRepoLive = Layer.succeed(RsvpRepo, {
       try: async () => {
         const db = await getDb();
         const rows = query<RsvpRow>(db,
-          "SELECT * FROM rsvps WHERE friday_id = ? AND state = 'in'", [fridayId]);
+          "SELECT * FROM rsvps WHERE friday_id = ? AND state IN ('pending','confirmed','locked','seated')", [fridayId]);
         return rows.map(toRsvp);
       },
       catch: dbError,
@@ -747,7 +747,7 @@ const RsvpRepoLive = Layer.succeed(RsvpRepo, {
       try: async () => {
         const db = await getDb();
         const rows = query<{ cnt: number }>(db,
-          "SELECT COUNT(*) as cnt FROM rsvps WHERE friday_id = ? AND state = 'in'", [fridayId]);
+          "SELECT COUNT(*) as cnt FROM rsvps WHERE friday_id = ? AND state IN ('pending','confirmed','locked','seated')", [fridayId]);
         return rows[0]?.cnt ?? 0;
       },
       catch: dbError,
