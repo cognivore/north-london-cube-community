@@ -40,6 +40,11 @@ export async function action({ request }: { request: Request }) {
 
   if (intent === "create-friday") {
     const date = formData.get("date") as string;
+    // Validate it's a Friday
+    const day = new Date(date + "T00:00:00").getDay();
+    if (day !== 5) {
+      return { error: "That's not a Friday!" };
+    }
     const venueId = formData.get("venueId") as string;
     const res = await fetch(`${API_BASE}/api/lifecycle/fridays`, {
       method: "POST",
@@ -102,13 +107,14 @@ export default function AppHome() {
       {isCoordinator && (
         <Form method="post" className="rounded-sm border border-rule bg-paper-alt p-4">
           <input type="hidden" name="intent" value="create-friday" />
-          <h2 className="text-sm font-semibold text-ink-soft">Add a Friday</h2>
+          <h2 className="text-sm font-semibold text-ink-soft">Add a Friday <span className="font-normal text-ink-faint">(must be a Friday)</span></h2>
           <input type="hidden" name="venueId" value={venues[0]?.id ?? ""} />
           <div className="mt-2 flex gap-2 items-end">
             <div className="flex-1">
               <label className="block text-xs text-ink-faint">Date</label>
               <input
                 name="date" type="date" defaultValue={getNextFridayDate()}
+                min={new Date().toISOString().slice(0, 10)}
                 className="w-full rounded-sm border border-rule-heavy bg-paper px-3 py-2 text-sm text-ink min-h-[44px]"
               />
             </div>
