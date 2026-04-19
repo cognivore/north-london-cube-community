@@ -183,21 +183,21 @@ export default function FridayDetail() {
         {canRsvp && (
           <div className="mt-3 space-y-2">
             {!amIn ? (
-              <div className="flex gap-2">
-                <Form method="post">
+              <div className="grid grid-cols-2 gap-2">
+                <Form method="post" className="contents">
                   <input type="hidden" name="intent" value="rsvp-in" />
                   <button
                     type="submit"
-                    className="rounded-sm border border-ok bg-paper px-6 py-3 text-base font-bold text-ok hover:bg-paper-alt min-h-[44px]"
+                    className="rounded-sm border border-ok bg-paper py-3 text-sm font-bold text-ok hover:bg-paper-alt min-h-[44px]"
                   >
-                    I'm in! (&pound;7)
+                    I'm in! (£7)
                   </button>
                 </Form>
-                <Form method="post">
+                <Form method="post" className="contents">
                   <input type="hidden" name="intent" value="rsvp-in-covered" />
                   <button
                     type="submit"
-                    className="rounded-sm border border-ok bg-paper px-4 py-3 text-sm font-medium text-ok hover:bg-paper-alt min-h-[44px]"
+                    className="rounded-sm border border-ok bg-paper py-3 text-sm font-medium text-ok hover:bg-paper-alt min-h-[44px]"
                   >
                     I'm in (can't afford)
                   </button>
