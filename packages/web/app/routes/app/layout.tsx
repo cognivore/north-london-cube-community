@@ -23,15 +23,24 @@ export async function loader({ request }: { request: Request }) {
     }
   }
 
+  // Check if TEST_MODE is enabled
+  const API_BASE = `http://localhost:${process.env.API_PORT ?? "37556"}`;
+  let testMode = false;
+  try {
+    const testRes = await fetch(`${API_BASE}/api/test/users`);
+    testMode = testRes.ok;
+  } catch {}
+
   return {
     user: meResult.data.user,
     nextFriday,
     rsvpCount,
+    testMode,
   };
 }
 
 export default function AppLayout() {
-  const { user, nextFriday, rsvpCount } = useLoaderData<typeof loader>();
+  const { user, nextFriday, rsvpCount, testMode } = useLoaderData<typeof loader>();
 
   const nextDate = nextFriday
     ? new Date(nextFriday.date + "T00:00:00").toLocaleDateString("en-GB", {
@@ -56,6 +65,11 @@ export default function AppLayout() {
             <Link to="/app/cubes" className="text-gray-300 hover:text-white">
               Cubes
             </Link>
+            {testMode && (
+              <Link to="/app/test" className="text-yellow-400 hover:text-yellow-300">
+                Test
+              </Link>
+            )}
             <Link to="/app/profile" className="text-gray-300 hover:text-white">
               {user.displayName}
             </Link>

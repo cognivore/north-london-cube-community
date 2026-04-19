@@ -47,6 +47,11 @@ export const register = (input: {
     const userRepo = yield* UserRepo;
     const inviteRepo = yield* InviteCodeRepo;
 
+    // In TEST_MODE, only coordinator email can register
+    if (process.env.TEST_MODE === "true" && input.email.trim().toLowerCase() !== "jm@memorici.de") {
+      return yield* Effect.fail<AuthError>({ kind: "invalid_invite_code" });
+    }
+
     // Validate invite code
     const invite = yield* inviteRepo.findByCode(input.inviteCode);
     if (!invite) {

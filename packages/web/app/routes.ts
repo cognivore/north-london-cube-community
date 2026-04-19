@@ -24,6 +24,7 @@ export default [
         route(":podId/round/:roundNumber", "routes/app/pods/round.tsx"),
       ]),
       route("profile", "routes/app/profile.tsx"),
+      route("test", "routes/app/test-panel.tsx"),
     ]),
   ]),
 

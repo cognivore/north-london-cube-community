@@ -1,0 +1,196 @@
+import { Form, useLoaderData, useActionData, Link } from "react-router";
+import { api, cookieHeader } from "../../lib/api";
+
+const API_BASE = `http://localhost:${process.env.API_PORT ?? "37556"}`;
+
+export async function loader({ request }: { request: Request }) {
+  const ch = cookieHeader(request);
+
+  // Check if TEST_MODE is enabled
+  const testCheck = await fetch(`${API_BASE}/api/test/users`, {
+    headers: { ...ch },
+  });
+  if (!testCheck.ok) {
+    throw new Response("TEST_MODE not enabled", { status: 404 });
+  }
+
+  const { users } = await testCheck.json();
+
+  // Also get fridays and their RSVP counts
+  const fridaysRes = await api.listFridays({ headers: ch });
+  const fridays = fridaysRes.ok ? fridaysRes.data.fridays : [];
+
+  // Get me
+  const meRes = await api.me({ headers: ch });
+
+  return { users, fridays, currentUser: meRes.ok ? meRes.data.user : null };
+}
+
+export async function action({ request }: { request: Request }) {
+  const ch = cookieHeader(request);
+  const formData = await request.formData();
+  const intent = formData.get("intent") as string;
+
+  if (intent === "create-phony") {
+    const count = parseInt(formData.get("count") as string, 10) || 4;
+    const fridayId = formData.get("fridayId") as string || undefined;
+    const res = await fetch(`${API_BASE}/api/test/phony-users`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...ch },
+      body: JSON.stringify({ count, fridayId: fridayId || undefined }),
+    });
+    const data = await res.json();
+    return { success: `Created ${data.users?.length ?? 0} phony users` };
+  }
+
+  if (intent === "sign-in-as") {
+    const userId = formData.get("userId") as string;
+    const res = await fetch(`${API_BASE}/api/test/sign-in-as`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ userId }),
+    });
+    if (!res.ok) return { error: "Failed to sign in as user" };
+    const setCookie = res.headers.get("set-cookie");
+    // We need to forward this cookie to the browser
+    return new Response(null, {
+      status: 302,
+      headers: {
+        Location: "/app",
+        ...(setCookie ? { "Set-Cookie": setCookie } : {}),
+      },
+    });
+  }
+
+  if (intent === "advance") {
+    const fridayId = formData.get("fridayId") as string;
+    const res = await fetch(`${API_BASE}/api/test/advance-friday/${fridayId}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+    });
+    const data = await res.json();
+    return { success: `Friday advanced to: ${data.friday?.state?.kind ?? "?"}` };
+  }
+
+  if (intent === "start-round") {
+    const podId = formData.get("podId") as string;
+    const roundNumber = formData.get("roundNumber") as string;
+    const res = await fetch(`${API_BASE}/api/test/start-round/${podId}/${roundNumber}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+    });
+    if (!res.ok) return { error: "Failed to start round" };
+    return { success: `Round ${roundNumber} started` };
+  }
+
+  if (intent === "report-as") {
+    const matchId = formData.get("matchId") as string;
+    const userId = formData.get("userId") as string;
+    const p1Wins = parseInt(formData.get("p1Wins") as string, 10);
+    const p2Wins = parseInt(formData.get("p2Wins") as string, 10);
+    const draws = parseInt(formData.get("draws") as string, 10) || 0;
+    const res = await fetch(`${API_BASE}/api/test/report-as`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...ch },
+      body: JSON.stringify({ matchId, userId, p1Wins, p2Wins, draws }),
+    });
+    if (!res.ok) return { error: "Failed to report" };
+    return { success: "Result reported" };
+  }
+
+  return null;
+}
+
+export default function TestPanel() {
+  const { users, fridays, currentUser } = useLoaderData<typeof loader>();
+  const actionData = useActionData<typeof action>();
+
+  return (
+    <div className="space-y-6">
+      <div className="rounded-xl border-2 border-yellow-500/50 bg-yellow-900/20 p-4">
+        <h1 className="text-xl font-bold text-yellow-400">TEST MODE</h1>
+        <p className="text-sm text-yellow-300/70">
+          Staging environment. You are {currentUser?.displayName ?? "unknown"} ({currentUser?.role}).
+        </p>
+      </div>
+
+      {actionData?.error && (
+        <div className="rounded-lg bg-red-900/50 p-3 text-sm text-red-300">{actionData.error}</div>
+      )}
+      {actionData?.success && (
+        <div className="rounded-lg bg-green-900/50 p-3 text-sm text-green-300">{actionData.success}</div>
+      )}
+
+      {/* Create phony users */}
+      <section className="rounded-xl border border-gray-800 bg-gray-900 p-4">
+        <h2 className="text-lg font-semibold text-white">Create phony users</h2>
+        <Form method="post" className="mt-3 flex flex-wrap gap-2 items-end">
+          <input type="hidden" name="intent" value="create-phony" />
+          <div>
+            <label className="block text-xs text-gray-400">Count</label>
+            <input name="count" type="number" defaultValue="4" min="1" max="16"
+              className="w-16 rounded border border-gray-700 bg-gray-800 px-2 py-2 text-sm text-white min-h-[44px]" />
+          </div>
+          <div className="flex-1">
+            <label className="block text-xs text-gray-400">RSVP to Friday</label>
+            <select name="fridayId"
+              className="w-full rounded border border-gray-700 bg-gray-800 px-2 py-2 text-sm text-white min-h-[44px]">
+              <option value="">None</option>
+              {fridays.slice(0, 8).map((f: any) => (
+                <option key={f.id} value={f.id}>{f.date} ({f.state.kind})</option>
+              ))}
+            </select>
+          </div>
+          <button type="submit"
+            className="rounded-lg bg-yellow-600 px-4 py-2 text-sm font-medium text-white hover:bg-yellow-500 min-h-[44px]">
+            Create
+          </button>
+        </Form>
+      </section>
+
+      {/* Advance Friday */}
+      <section className="rounded-xl border border-gray-800 bg-gray-900 p-4">
+        <h2 className="text-lg font-semibold text-white">Advance Friday</h2>
+        <div className="mt-3 space-y-2">
+          {fridays.slice(0, 5).map((f: any) => (
+            <Form method="post" key={f.id} className="flex items-center justify-between gap-2">
+              <input type="hidden" name="intent" value="advance" />
+              <input type="hidden" name="fridayId" value={f.id} />
+              <span className="text-sm text-gray-300">{f.date}</span>
+              <span className="text-xs text-gray-500">{f.state.kind}</span>
+              <button type="submit"
+                className="rounded bg-gray-700 px-3 py-1 text-xs text-white hover:bg-gray-600 min-h-[44px]">
+                Advance →
+              </button>
+            </Form>
+          ))}
+        </div>
+      </section>
+
+      {/* User directory — sign in as anyone */}
+      <section className="rounded-xl border border-gray-800 bg-gray-900 p-4">
+        <h2 className="text-lg font-semibold text-white">User directory ({users.length})</h2>
+        <p className="text-xs text-gray-500 mt-1">Click to sign in as that user</p>
+        <div className="mt-3 space-y-1 max-h-96 overflow-y-auto">
+          {users.map((u: any) => (
+            <Form method="post" key={u.id} className="flex items-center justify-between rounded-lg bg-gray-800 px-3 py-2 hover:bg-gray-700">
+              <input type="hidden" name="intent" value="sign-in-as" />
+              <input type="hidden" name="userId" value={u.id} />
+              <div>
+                <span className="text-sm font-medium text-white">{u.display_name}</span>
+                <span className="ml-2 text-xs text-gray-500">{u.email}</span>
+                {u.role === "coordinator" && (
+                  <span className="ml-2 text-xs text-amber-400">coordinator</span>
+                )}
+              </div>
+              <button type="submit"
+                className="rounded bg-amber-500/20 px-2 py-1 text-xs text-amber-400 hover:bg-amber-500/30 min-h-[44px]">
+                Sign in as
+              </button>
+            </Form>
+          ))}
+        </div>
+      </section>
+    </div>
+  );
+}
