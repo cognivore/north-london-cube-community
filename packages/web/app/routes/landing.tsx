@@ -117,15 +117,15 @@ function FrameworkRow({
 }) {
   return (
     <div
-      className={`flex items-center justify-between px-4 py-2${
+      className={`flex items-start gap-3 px-4 py-2.5${
         last ? "" : " border-b border-rule"
       }`}
     >
-      <span className="flex items-center gap-2 text-ink-faint uppercase tracking-wider text-xs">
+      <span className="flex shrink-0 items-center gap-1.5 pt-0.5 text-ink-faint uppercase tracking-wider text-xs w-16">
         <Icon name={icon} />
         <span style={{ fontVariant: "small-caps" }}>{label}</span>
       </span>
-      <span className="mono text-ink" data-mono>
+      <span className="mono text-ink text-sm" data-mono>
         {value}
       </span>
     </div>
