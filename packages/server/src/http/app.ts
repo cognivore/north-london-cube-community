@@ -15,6 +15,7 @@ import { me } from "./routes/me.js";
 import { venues } from "./routes/venues.js";
 import { admin } from "./routes/admin.js";
 import { lifecycle } from "./routes/lifecycle.js";
+import { testmode } from "./routes/testmode.js";
 
 export function createApp(
   runEffect: <A, E>(effect: Effect.Effect<A, E, any>) => Promise<A>,
@@ -47,6 +48,7 @@ export function createApp(
   app.route("/api/venues", venues);
   app.route("/api/admin", admin);
   app.route("/api/lifecycle", lifecycle);
+  app.route("/api/test", testmode);
 
   // Health check
   app.get("/api/health", (c) => c.json({ status: "ok" }));

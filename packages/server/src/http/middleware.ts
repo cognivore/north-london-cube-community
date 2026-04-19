@@ -64,11 +64,11 @@ export function authMiddleware() {
 // Admin middleware
 // ---------------------------------------------------------------------------
 
-export function adminMiddleware() {
+export function coordinatorMiddleware() {
   return async (c: HonoContext<AppEnv>, next: Next) => {
     const user = c.get("user");
-    if (!user || user.role !== "admin") {
-      return apiError(c, 403, "FORBIDDEN", "Admin access required");
+    if (!user || user.role !== "coordinator") {
+      return apiError(c, 403, "FORBIDDEN", "Coordinator access required");
     }
     await next();
   };

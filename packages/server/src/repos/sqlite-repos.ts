@@ -1361,6 +1361,19 @@ export const seedInviteCode = Effect.tryPromise({
 export async function seed(): Promise<void> {
   await Effect.runPromise(seedVenues);
   await Effect.runPromise(seedInviteCode);
+  await seedCoordinator();
+}
+
+async function seedCoordinator(): Promise<void> {
+  const db = await getDb();
+  const existing = query<{ id: string }>(db, "SELECT id FROM users WHERE email = ?", ["jm@memorici.de"]);
+  if (existing.length > 0) {
+    // Ensure coordinator role
+    run(db, "UPDATE users SET role = 'coordinator' WHERE email = ?", ["jm@memorici.de"]);
+    persist();
+  }
+  // If user doesn't exist yet, they'll get coordinator role when they register
+  // via a check in the register program
 }
 
 /** @deprecated Use seed() — kept for backward compat */

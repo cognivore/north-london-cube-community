@@ -94,7 +94,7 @@ export const register = (input: {
         noShowCount: unsafeNonNegativeInt(0),
         banned: { kind: "not_banned" },
       },
-      role: "member",
+      role: input.email.trim().toLowerCase() === "jm@memorici.de" ? "coordinator" : "member",
     };
 
     yield* userRepo.create(user);

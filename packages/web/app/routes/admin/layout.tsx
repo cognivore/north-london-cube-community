@@ -4,7 +4,7 @@ import { api } from "../../lib/api";
 export async function loader() {
   const result = await api.me();
   if (!result.ok) throw redirect("/login");
-  if (result.data.user.role !== "admin") throw redirect("/app");
+  if (result.data.user.role !== "coordinator") throw redirect("/app");
   return { user: result.data.user };
 }
 

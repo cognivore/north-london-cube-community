@@ -67,9 +67,9 @@ export const enrollCube = (input: {
       });
     }
 
-    // Validate user is host-capable
+    // Validate user exists
     const user = yield* userRepo.findById(userId);
-    if (!user || !user.profile.hostCapable) {
+    if (!user) {
       return yield* Effect.fail<EnrollmentError>({ kind: "not_host_capable" });
     }
 

@@ -17,7 +17,7 @@ export const DRAFT_FORMATS = [
 
 export type DraftFormat = (typeof DRAFT_FORMATS)[number];
 
-export const SYSTEM_ROLES = ["member", "admin"] as const;
+export const SYSTEM_ROLES = ["member", "coordinator"] as const;
 export type SystemRole = (typeof SYSTEM_ROLES)[number];
 
 export const RSVP_STATES = [

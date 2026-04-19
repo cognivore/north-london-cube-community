@@ -9,9 +9,9 @@ export default function Landing() {
           North London<br />
           <span className="text-amber-400">Cube Community</span>
         </h1>
-        <p className="mt-4 max-w-md text-lg text-gray-400">
-          Friday night MTG cube drafts at Hitchhiker & Owl.
-          RSVP, vote on cubes, and track your matches.
+        <p className="mt-6 max-w-md text-lg text-gray-300">
+          Every Friday. Same time. Same place.<br />
+          Bring a cube or just show up and draft.
         </p>
 
         <div className="mt-8 flex gap-4">
@@ -30,25 +30,47 @@ export default function Landing() {
         </div>
       </header>
 
-      {/* Features */}
+      {/* What this is */}
       <section className="bg-gray-900 py-16 px-4">
-        <div className="mx-auto max-w-2xl space-y-12">
-          <Feature
-            title="RSVP in one tap"
-            description="Tap /in to reserve your seat for Friday. No group chats, no confusion."
-          />
-          <Feature
-            title="Cube voting"
-            description="When multiple cubes are offered, ranked-choice voting picks the best fit."
-          />
-          <Feature
-            title="Live pairings & timer"
-            description="Swiss and team draft pairings generated automatically. Server-authoritative round timer on your phone."
-          />
-          <Feature
-            title="Standings & history"
-            description="Match results and standings computed in real-time. Track your record across weeks."
-          />
+        <div className="mx-auto max-w-2xl space-y-10">
+          <div>
+            <h2 className="text-2xl font-bold text-white">No laws, no masters</h2>
+            <p className="mt-2 text-gray-400">
+              This is a decentralised, self-organised micro-community.
+              There is no committee, no membership fee, no gatekeeping.
+              Anyone can bring a cube. Anyone can show up and play.
+              The only thing that's fixed is the framework: every Friday,
+              same venue, same time.
+            </p>
+          </div>
+
+          <div>
+            <h2 className="text-2xl font-bold text-white">The framework</h2>
+            <div className="mt-3 rounded-xl bg-gray-800 p-5 space-y-2">
+              <Detail label="Where" value="Hitchhiker & Owl, Palmers Green N13" />
+              <Detail label="When" value="Every Friday" />
+              <Detail label="Doors" value="18:30" />
+              <Detail label="P1P1" value="18:45" />
+            </div>
+          </div>
+
+          <div>
+            <h2 className="text-2xl font-bold text-white">How it works</h2>
+            <div className="mt-3 space-y-4 text-gray-400">
+              <Step n="1" text="RSVP so people know you're coming. Doesn't matter if there's a cube yet." />
+              <Step n="2" text="Got a cube? Enroll it. Multiple cubes offered? Everyone votes." />
+              <Step n="3" text="Friday evening: show up, draft, play 3 rounds. The app handles pairings, timer, and standings." />
+            </div>
+          </div>
+
+          <div>
+            <h2 className="text-2xl font-bold text-white">Formats</h2>
+            <p className="mt-2 text-gray-400">
+              Swiss draft (4/6/8 players), Team draft 2v2, 3v3, 4v4,
+              Rochester, Winston, Winchester, Grid, Glimpse, Sealed.
+              Whatever the cube supports.
+            </p>
+          </div>
         </div>
       </section>
 
@@ -60,11 +82,22 @@ export default function Landing() {
   );
 }
 
-function Feature({ title, description }: { title: string; description: string }) {
+function Detail({ label, value }: { label: string; value: string }) {
   return (
-    <div>
-      <h3 className="text-xl font-semibold text-white">{title}</h3>
-      <p className="mt-1 text-gray-400">{description}</p>
+    <div className="flex justify-between">
+      <span className="text-gray-400">{label}</span>
+      <span className="font-medium text-white">{value}</span>
+    </div>
+  );
+}
+
+function Step({ n, text }: { n: string; text: string }) {
+  return (
+    <div className="flex gap-3">
+      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-amber-500/20 text-sm font-bold text-amber-400">
+        {n}
+      </span>
+      <p>{text}</p>
     </div>
   );
 }

@@ -5,7 +5,7 @@
 import { Hono } from "hono";
 import { Effect } from "effect";
 import type { AppEnv } from "../middleware.js";
-import { apiError, authMiddleware, adminMiddleware } from "../middleware.js";
+import { apiError, authMiddleware, coordinatorMiddleware } from "../middleware.js";
 import {
   FridayRepo, UserRepo, AuditRepo,
 } from "../../repos/types.js";
@@ -16,7 +16,7 @@ import { isOk } from "@cubehall/core";
 const admin = new Hono<AppEnv>();
 
 admin.use("*", authMiddleware());
-admin.use("*", adminMiddleware());
+admin.use("*", coordinatorMiddleware());
 
 // POST /api/admin/fridays/:id/force-state
 admin.post("/fridays/:id/force-state", async (c) => {
