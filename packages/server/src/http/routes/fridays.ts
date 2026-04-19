@@ -82,40 +82,37 @@ fridays.get("/:id", async (c) => {
         const rsvps = yield* rsvpRepo.findByFriday(friday.id);
         const pods = yield* podRepo.findByFriday(friday.id);
 
-        // Build a player directory: userId → { displayName, dciNumber }
-        const players = yield* Effect.tryPromise({
-          try: async () => {
-            const { getDb: gdb, query: dbq } = await import("../../db/sqlite.js");
-            const db = await gdb();
-            const allUserIds = new Set([
-              ...rsvps.map((r: any) => r.userId),
-              ...enrollments.map((e: any) => e.hostId),
-            ]);
-            const result: Record<string, { displayName: string; dciNumber: number | null }> = {};
-            for (const uid of allUserIds) {
-              const rows = dbq<{ display_name: string; dci_number: number | null }>(
-                db, "SELECT display_name, dci_number FROM users WHERE id = ?", [uid],
-              );
-              if (rows[0]) {
-                result[uid as string] = {
-                  displayName: rows[0].display_name,
-                  dciNumber: rows[0].dci_number,
-                };
-              }
-            }
-            return result;
-          },
-          catch: () => ({} as Record<string, { displayName: string; dciNumber: number | null }>),
-        });
-
-        return { friday, enrollments, rsvps, pods, players };
+        return { friday, enrollments, rsvps, pods };
       }),
     );
 
     if (!detail) {
       return apiError(c, 404, "NOT_FOUND", "Friday not found");
     }
-    return c.json(detail);
+
+    // Build player directory outside Effect (needs async import)
+    let players: Record<string, { displayName: string; dciNumber: number | null }> = {};
+    try {
+      const { getDb, query } = await import("../../db/sqlite.js");
+      const db = await getDb();
+      const allUserIds = new Set([
+        ...detail.rsvps.map((r: any) => r.userId),
+        ...detail.enrollments.map((e: any) => e.hostId),
+      ]);
+      for (const uid of allUserIds) {
+        const rows = query<{ display_name: string; dci_number: number | null }>(
+          db, "SELECT display_name, dci_number FROM users WHERE id = ?", [uid],
+        );
+        if (rows[0]) {
+          players[uid as string] = {
+            displayName: rows[0].display_name,
+            dciNumber: rows[0].dci_number ?? null,
+          };
+        }
+      }
+    } catch {}
+
+    return c.json({ ...detail, players });
   } catch {
     return apiError(c, 500, "INTERNAL", "Failed to load friday");
   }
