@@ -1,209 +1,273 @@
 ---
-title: The DCI Aesthetic — a design brief for Cubehall
-status: draft
+title: The DCI Aesthetic — Cubehall design mandate
+status: mandate
+version: 2
 date: 2026-04-19
 ---
 
-# The DCI Aesthetic
+# The DCI Aesthetic — Cubehall design mandate
 
-A design brief for Cubehall that fuses the dense, trusted, tool-like feel of Wizards Event Reporter and the DCI-number era with modern web typography, Tailwind, and portrait-first screens. The current landing-page layout stays intact; this document is about the grain of the surface, not the skeleton underneath.
+This document supersedes the prior draft. It is a mandate, not a menu. Every section states a requirement; nothing here is optional.
 
-## 1. What we are trying to reignite
+**Two overriding mandates govern the rest of the document.**
 
-Before we can pick our bridge-builders, we have to name the thing we are nostalgic for. The old Wizards Event Reporter (WER) and the DCI ecosystem it sat inside produced a very specific feeling, and most modern Magic software has failed to reproduce it. A forensic list:
+1. **Light is the only colour scheme.** Cubehall ships light-only. The prior dark substrate (`bg-gray-950` et al.) is dropped in full. `prefers-color-scheme` is ignored. The `<html>` element declares `color-scheme: light`.
+2. **Era-appropriate iconography is Mark James's famfamfam Silk set.** Silk is mandated as the sole raster icon system. No Lucide, no Heroicons, no Feather. The favicon shall be generated from Silk's `dice.png`. Licensing and integration are specified in §5.
 
-The software was obviously a tool. Battleship-grey MFC dialogs. Tabs. Inset grids. A status bar at the bottom that told you, with a little green dot, whether the DCI Reporter back-end was reachable. The fonts were boring. The layouts were dense. Nothing moved unless you told it to. When you clicked *Pair Round*, the grid populated in a single frame.
+The current landing-page layout (`packages/web/app/routes/landing.tsx`) is preserved. What this mandate changes is surface grain, colour, typography, and iconography — not structure.
 
-It was also unmistakably numeric. The ten-digit DCI number was the player's identity, printed on a laminated card, recited at the table, written in sharpie on top of a deck-registration sheet. Numbers in that world were never decorative; they were always right-aligned, always tabular, always the same width as their neighbours. The whole rating system leaned on the visual rhythm of those fixed columns.
+## 1. The bridge-builders (abbreviated, for reference)
 
-And it was trusted. Even when it crashed at round three of a Regionals, scorekeepers trusted WER because it looked trustworthy in the way a circuit-breaker panel looks trustworthy — inert, labelled, the same today as yesterday. The absence of delight was load-bearing. A bouncy button on a pairings screen would have felt like the wrong uniform.
+The theoretical case was made at length in version 1 of this brief. Retained here only as a citation list, because the mandate below descends from it.
 
-If we can translate that triplet — **obviously a tool**, **unmistakably numeric**, **inert-looking to the point of being trusted** — into portrait-first web, Cubehall starts to feel like a piece of tournament infrastructure rather than a homework project that happens to run drafts.
+Information-density tradition: Edward Tufte (1983, 1990), Jef Raskin (*The Humane Interface*, 2000), Alan Cooper (*About Face*, 1995).
 
-## 2. The bridge-builders
+Typography-first school: Oliver Reichenstein ("Web Design is 95% Typography", 2006; iA Writer), Matthew Butterick (*Practical Typography*), Rasmus Andersson (Inter), Susan Kare (Mac icons), Tobias Frere-Jones (Retina).
 
-These are the writers and designers whose work lets us carry the WER feeling forward without dragging along its bugs or its Win32 ceiling. Five generations, roughly grouped.
+Resilient-web school: Frank Chimero ("The Web's Grain", 2015), Ethan Marcotte (*Responsive Web Design*, 2011), Luke Wroblewski (*Mobile First*, 2011), Jeremy Keith (*Resilient Web Design*, 2016), David Bryant Copeland (*Brutalist Web Design*, 2016), Jen Simmons and Rachel Andrew (intrinsic design, CSS Grid).
 
-### The information-density tradition
+Tool-aesthetic contemporaries: Adam Wathan and Steve Schoger (*Refactoring UI*, Tailwind), Maciej Cegłowski (Pinboard), 37signals, Bret Victor (*Magic Ink*), Josh Comeau.
 
-**Edward Tufte** is the unavoidable ancestor. *The Visual Display of Quantitative Information* (1983) and *Envisioning Information* (1990) argued for a data-ink ratio, small multiples, and the elimination of chartjunk. His work is the theoretical backing for every dense tournament readout ever printed. Every pairings sheet, every standings table, every Elo graph is a Tufte page in disguise. His relevance to Cubehall is that *most* of our screens will be, fundamentally, tables — and Tufte gives us the license to make them narrow-ruled, minimally-bordered, and numerically uncompromising rather than apologising for being tables by wrapping each row in a drop-shadowed card.
+## 2. The light palette — mandated tokens
 
-**Jef Raskin**, writing in *The Humane Interface* (2000), argued for monotony, modelessness, and keyboard primacy. His zooming user interface never shipped, but his contempt for "feature bloat disguised as friendliness" is exactly the ethos you want on a scorekeeper's screen. Raskin's rules — that a tool should have no surprising modes, that the user should never have to ask "what state is this in?" — are the spiritual source of any good pairings-and-standings page.
+The palette evokes a tournament printout on office paper under fluorescent venue lighting. It is not a "modern SaaS white" and it is not a Win9x `#D4D0C8` pastiche. It is warm cream paper, deep cold ink, hairline warm rules, two functional accents.
 
-**Alan Cooper**'s *About Face* (1995, now in its fourth edition with Reimann and Cronin) introduced goal-directed design and personas. The useful bit for us is his insistence that sovereign applications — the ones you sit inside for a whole session — should look different from transient utilities. WER is a sovereign app. Cubehall's round screen should be a sovereign app. The landing page is a transient one. Different visual contracts.
-
-### The typography-first school
-
-**Oliver Reichenstein** published "Web Design is 95% Typography" in 2006 and followed it with the iA Writer family — applications whose entire identity is a single well-chosen monospaced screen. Reichenstein is the direct bridge between WER's typographic conservatism and modern web design: he showed the industry that reverence for letterforms, grid, and vertical rhythm is not retro but foundational. His writing is the permission slip for Cubehall to lean into Berkeley Mono or JetBrains Mono in places other sites would reach for Poppins.
-
-**Matthew Butterick**'s *Practical Typography* (butterick.com/practical-typography, free online, 2013 onwards) is the working handbook. It is opinionated, concrete, and reliably right about measure, leading, hyphenation, and hanging punctuation. Butterick also writes and sells typefaces (Equity, Concourse, Triplicate) built around the observation that the software world under-uses small-caps, true italics, and numeric alternates. Anywhere Cubehall displays a DCI-style ID, a date, or a score, Butterick's rules apply. His chapter on tables is short, sharp, and — importantly — written for non-designers who have to ship.
-
-**Rasmus Andersson**, who drew Inter while at Figma, designed specifically for mixed screen sizes, tabular numerals, and slashed zeros. Inter is the quietest way to get a Swiss-modernist feel on a device class Raskin never saw. It is also OFL-licensed. Inter + `font-variant-numeric: tabular-nums slashed-zero` is, in one stroke, the closest thing to a direct port of the DCI-card vibe into a phone browser.
-
-**Susan Kare**'s Mac icons, printed at 16×16 and 32×32, are a reminder that crisp, pixel-honest iconography scales into a world of high-DPI screens surprisingly well. If we ever need a glyph — a checkmark beside an RSVP, a dot in a status bar — we should think Kare before we think Lucide's fashionable hairline.
-
-### The resilient-web school
-
-**Frank Chimero**'s essay "The Web's Grain" (2015) is the canonical argument that web design should flow with rather than against the medium. "The fundamental unit of the web is not the page but the edge between things." This is the single best corrective to the temptation to rebuild WER's fixed-pixel MFC dialogs verbatim. Instead we take what was valuable about WER (density, legibility, trust) and let it flex.
-
-**Ethan Marcotte** coined "responsive web design" in 2010 (*A List Apart*, and a book the next year from A Book Apart). Fluid grids, flexible images, media queries — the conceptual backbone of any site that lives on a phone.
-
-**Luke Wroblewski**'s *Mobile First* (2011) took Marcotte's responsive idea and inverted the priority stack. You design for the smallest, most-constrained surface first; desktop is the progressive enhancement. This matters enormously for Cubehall because the actual tournament surface — the round screen, the standings screen, the pairings screen — is always going to be consumed on a phone held in portrait by a player who is already holding a draft pile.
-
-**Jeremy Keith**'s *Resilient Web Design* (2016, free online) argues for a progressive-enhancement stance that would have been familiar to anyone who worked on the original WER: your app must still work when the network is bad, when JavaScript fails, when the screen is small. Cubehall runs in a venue with basement-grade wifi; Keith's ethos is not optional.
-
-**David Bryant Copeland**'s "Brutalist Web Design" manifesto (brutalist-web.design, 2016) is a short list of rules — visible links, readable body text, minimum contrast, no stealing scroll — that produces sites that look like WER in spirit without pretending to be WER in surface. If you want a single page to hand a developer as they build a pairings table, this is it.
-
-**Jen Simmons** and **Rachel Andrew** popularised CSS Grid and "intrinsic web design" between 2016 and 2019. Intrinsic design is the argument that we should stop laying things out to imaginary device sizes and instead let content find its own comfortable width. This maps cleanly onto tournament UIs: a pairings table wants to be as wide as it needs to be, on whatever screen it lands on.
-
-### The tool-aesthetic contemporaries
-
-**Adam Wathan** and **Steve Schoger** (Tailwind and *Refactoring UI*) are the practical engine that makes this whole fusion cheap. Tailwind's utility-first approach is ideologically aligned with Raskin's modelessness — every class does one legible thing — and it makes the kind of surgical, token-level decisions we need (tabular nums here, 1px border there, a hairline shadow only on hover) tractable inside a React Router app. Their book, *Refactoring UI* (2018), is the most honest how-to on visual hierarchy that isn't purely decorative. Its chapters on depth, layout, and colour are the correct compass even when we want to go harder and drier than its default examples.
-
-**Maciej Cegłowski**'s Pinboard (pinboard.in, 2009 onwards) is the living demonstration of "utilitarian tool, on the web, on purpose". The site has barely changed in fifteen years because it did not need to. His public writing ("A Rocket To Nowhere", "The Website Obesity Crisis") is a useful counterweight to every urge to over-engineer a UI.
-
-**37signals** — Jason Fried and DHH — are the corporate-software equivalent. Basecamp's recent rebrand and the Hey and Once product lines all lean into a deliberately "business software from 2008" look that is not accidental. Their design team (Jonas Downey and others) have written extensively about picking a look that will age slowly. Their palette decisions — a flat background, one or two accent colours, typographic restraint — are directly transferable.
-
-**Bret Victor**'s essays, particularly *Magic Ink* (2006) and *Up and Down the Ladder of Abstraction* (2011), argue that information software should behave like a well-designed document, not an application. He will never say the word *tournament* but his argument for "context-sensitive information graphics that answer the user's question before they ask" is precisely the argument for the round screen we want to build — one that shows every player their pairing, their match number, their seat, and the round timer without a single click.
-
-**Josh Comeau** writes the best public reference material for modern CSS — his blog posts on stacking contexts, layout modes, and container queries are the operational manual that turns the above philosophy into code. Pair with Sara Soueidan for everything accessibility-adjacent.
-
-### The quieter undercurrent
-
-A handful of less-named influences are worth naming explicitly because they sit exactly on the seam we are trying to weld:
-
-The *LettError* duo, **Erik van Blokland** and **Just van Rossum**, whose playful-but-rigorous typographic programming work pre-figured variable fonts and parametric typography. They are the reason we can cheaply animate numbers in a way Raskin would have approved of.
-
-**Tobias Frere-Jones** (Retina, Whitney, the numerals-for-small-sizes tradition at Hoefler & Co.) — his essays on numeric typography, particularly on *Retina* for the *Wall Street Journal*'s share-tables, are a direct prescription for how Cubehall should set standings. Retina was drawn to stay legible at 4pt on cheap newsprint; a phone under venue lighting is the same problem, slightly relocated.
-
-**Donald Knuth**'s TeX (1978 onwards) is the distant root of everything in this document that concerns tabular alignment. If you ever wonder whether a given row of numbers looks right, ask whether TeX's `tabular` environment would have placed it the same way.
-
-## 3. The synthesis — fusing past and present
-
-The current Cubehall landing page is not wrong; it is simply generic. The existing layout — hero, "no laws, no masters", the framework card, the numbered steps, the formats paragraph, a thin footer — is the right information in the right order, and we should leave it exactly as it is. What we are changing is the surface grain.
-
-Seven moves, in priority order.
-
-### 3.1 Typography becomes the identity
-
-The strongest single intervention is to replace the default Tailwind sans with a deliberate pairing. A neo-grotesque for body (Inter, Söhne, or IBM Plex Sans — Inter is the safest and freest) and a geometric or machine-like monospace for every numeric, ID-like, or tabular element (Berkeley Mono if the budget allows, JetBrains Mono or IBM Plex Mono if not, Departure Mono if you want the CRT tilt to be unmistakable). Display type — the "North London / Cube Community" header — wants an older, slightly quieter treatment than the current `tracking-tight` amber: Reichenstein's rule of thumb is that display type on the web should feel like something you could engrave. Consider dropping tracking, increasing weight to semibold rather than bold, and letting the word-break do the work it already does.
-
-Load all this via `@fontsource` packages or self-hosted WOFF2. Do not rely on Google Fonts CDN; venue wifi is hostile. Apply `font-variant-numeric: tabular-nums slashed-zero` in a single global rule and forget about it.
-
-### 3.2 Numbers earn their own reverence
-
-Anywhere a number appears — round numbers, match numbers, seats, scores, timer, DCI-style player IDs when we re-introduce them — it goes in mono, right-aligned in tables, with `font-feature-settings: "zero" 1, "ss01" 1`. Make player IDs display as grouped five-digit clusters (e.g. `38472 91062`) the way the old DCI cards did — this is equal parts nostalgia, checksum-hostile-to-misreading, and legibility win on small screens.
-
-### 3.3 The framework card becomes a status panel
-
-The existing `Where / When / Doors / P1P1` rows are the single element on the landing page where WER's DNA can express itself unmistakably. Keep the layout — label left, value right — but strip the `rounded-xl` softness and the `bg-gray-800` fill. Replace with a 1px hairline border in a desaturated blue-grey (something around `#2a3442`), zero radius, label in small-caps micro-type, value in mono with tabular-nums. Between rows, a single-pixel divider. The entire card reads as if it had been screenshotted out of a tournament-software dialog and dropped into a website — which is the point.
-
-### 3.4 Numbered steps become bracketed line-items
-
-Replace the filled amber circles with bracketed monospace numerals (`[01]`, `[02]`, `[03]`) in a pale-on-dark tone. This evokes a changelog, a README, or a numbered tournament procedure step rather than an onboarding wizard. Surface text stays exactly where it is.
-
-### 3.5 Buttons stop pretending to be pillows
-
-The current `rounded-lg` amber call-to-action is fine, but it reads as 2019-SaaS. Go harder: `rounded-sm` or `rounded-none`, a 1px border in the amber, a flat fill (or no fill and amber text on hover), and a visible keyboard-shortcut hint — `Sign in ⏎` for the primary, `Register` for the secondary. Include `accesskey` attributes. WER did not have affordances, but it had shortcuts, and shortcut-hinting is the correct modern translation.
-
-### 3.6 Colour leans toward a tournament palette
-
-Keep gray-950 as the substrate; keep amber as one accent. Introduce a second accent — a DCI-card teal-blue around `#4a9eb8` — for *informational* elements: the status dot in a future persistent footer, links inside body text, focus rings. Reserve amber for actions. Reserve red for destructive / warning / dropped-from-round states. This three-accent discipline is straight out of Schoger & Wathan, and it maps onto tournament semantics (go / info / stop) cleanly.
-
-### 3.7 The footer gains a status stripe later
-
-Not on the landing page — you said layout stays — but plan for it. Every authenticated page in Cubehall should end in a fixed-height status bar, maybe 28px, that shows venue, tonight's round, player count, clock, and a little green/amber/red dot for back-end connectivity. That bar is the single most direct quote of WER's DNA, and once you have it you will find it does half the trust-building work for free.
-
-## 4. The portrait-first dimension
-
-Everything above holds on desktop. The constraint that matters more is the 390×844 pixel phone held in one hand by a player who is mid-draft. Three notes.
-
-Use `100dvh` not `100vh` for full-height heroes; it handles the iOS URL bar correctly where `min-h-screen` does not.
-
-Put container queries on every density-sensitive element — the framework panel, the standings rows, the pairings cells. On a narrow container a label-above-value stacked layout is correct; on a wider one a label-left, value-right row is correct. The same component serves both without a media query. This is Rachel Andrew's intrinsic-design argument in one CSS rule.
-
-Respect the thumb zone. Luke Wroblewski's data from *Mobile First* still holds: the bottom third of the screen is the easy-reach region. Primary actions want to live there on small screens. The current landing page's Sign-in / Register pair is already centred-mid; on phones it is below the fold, which is fine and thumb-friendly. Keep it so.
-
-## 5. What this looks like as code
-
-A sketch of the Tailwind configuration and app.css changes — not to be applied yet, just to make the above concrete.
+These tokens are mandated as the entire colour vocabulary. Additions require an ADR.
 
 ```css
-/* app.css */
-@import "tailwindcss";
-
 @theme {
-  --font-sans: "Inter", system-ui, sans-serif;
-  --font-mono: "JetBrains Mono", "Berkeley Mono", ui-monospace, monospace;
-  --font-display: "Inter", system-ui, sans-serif;
+  /* Surface */
+  --color-paper:        #FBF9F3;   /* primary background — warm cream */
+  --color-paper-alt:    #F5F2E8;   /* alt surface for inset panels */
+  --color-paper-sunken: #EFEBDC;   /* deeper inset — scorekeeper grids */
 
-  --color-amber-500: #d97706;          /* keep, but slightly desaturated */
-  --color-dci-teal: #4a9eb8;
-  --color-rule: #2a3442;               /* hairline borders */
-  --color-surface: #0a0f14;            /* deeper than gray-950 */
+  /* Ink */
+  --color-ink:          #11181C;   /* near-black primary text */
+  --color-ink-soft:     #3E4953;   /* secondary text */
+  --color-ink-faint:    #6B7480;   /* tertiary / metadata */
+
+  /* Rules */
+  --color-rule:         #E6DFC9;   /* hairline dividers */
+  --color-rule-heavy:   #BFB8A3;   /* panel edges, table headers */
+  --color-rule-focus:   #11181C;   /* focus / selected row border */
+
+  /* Action accent — amber retained */
+  --color-amber:        #B45309;   /* darkened for contrast on cream */
+  --color-amber-soft:   #FED7AA;   /* backgrounds, hover fills */
+
+  /* Informational accent — DCI teal */
+  --color-dci-teal:     #0B6B83;   /* links, info dots, focus rings */
+  --color-dci-teal-soft:#CDE4EB;
+
+  /* Warning / destructive */
+  --color-warn:         #9F1239;   /* dropped player, error, destructive */
+  --color-warn-soft:    #FECDD3;
+
+  /* Status */
+  --color-ok:           #166534;   /* green status dot */
+  --color-pending:      #854D0E;   /* amber status dot */
 }
 
 @layer base {
   html {
-    font-feature-settings: "ss01" 1, "zero" 1, "cv11" 1;
-    font-variant-numeric: tabular-nums slashed-zero;
-  }
-  :focus-visible {
-    outline: 2px solid var(--color-dci-teal);
-    outline-offset: 2px;
+    color-scheme: light;
+    background: var(--color-paper);
+    color: var(--color-ink);
   }
 }
 ```
 
-And three component-level rules that would (when the time comes) upgrade the three elements identified above, without touching the layout:
+Contrast: every foreground/background pair above clears WCAG AA at 16px. The ink-on-paper pair clears AAA.
 
-```tsx
-// Detail row in the framework card
-<div className="flex justify-between border-b border-[var(--color-rule)] py-2 last:border-b-0">
-  <span className="font-mono text-xs uppercase tracking-widest text-gray-500">{label}</span>
-  <span className="font-mono text-sm tabular-nums text-gray-100">{value}</span>
-</div>
+Action/info/warn/ok are the only four functional accents. Amber = do-this. Teal = know-this. Warn = avoid-this / destructive. OK = connected / confirmed. No decorative colour is permitted.
 
-// Step row
-<div className="flex gap-3">
-  <span className="font-mono text-sm text-amber-500">[{n.padStart(2, "0")}]</span>
-  <p className="text-gray-400">{text}</p>
-</div>
+## 3. Typography — mandated stack
 
-// Primary button
-<Link className="rounded-sm border border-amber-500 bg-amber-500 px-6 py-3 font-mono text-sm uppercase tracking-wide text-gray-950 hover:bg-transparent hover:text-amber-500 transition-colors">
-  Sign in <span className="opacity-60">⏎</span>
-</Link>
+Body: **Inter** (self-hosted via `@fontsource`), 16px base, 1.55 line-height.
+Mono: **JetBrains Mono** (self-hosted), used for every number, ID, timestamp, shortcut hint, table cell containing numeric data, and the bracketed step markers.
+Display: **Inter** at semibold weight, slight negative tracking only above 32px.
+
+Google Fonts CDN is forbidden — venue wifi is hostile and the privacy surface is unnecessary. Fonts are bundled and self-served.
+
+Global base rules (mandated):
+
+```css
+html {
+  font-family: Inter, system-ui, sans-serif;
+  font-feature-settings: "ss01" 1, "cv11" 1;
+  font-variant-numeric: tabular-nums slashed-zero;
+}
+code, .mono, [data-mono] {
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+}
 ```
 
-None of these change the landing page's skeleton. They all change its voice.
+Numeric columns in any table render right-aligned, mono, with `font-variant-numeric: tabular-nums slashed-zero`. Player IDs render in grouped five-digit clusters (`38472 91062`), echoing the DCI-card format.
 
-## 6. A brief further-reading list
+## 4. The seven mandated moves
 
-If you want to chase any of the threads in this document, these are the short-and-long reads that pay back the time.
+These apply to every authenticated screen as built, and govern the eventual refactor of the landing page (layout preserved, classes replaced).
 
-Tufte, *The Visual Display of Quantitative Information* (1983) and *Envisioning Information* (1990). Two hours with each of these is worth a year of reading blog posts about dashboards.
+**4.1** The framework card (`Where / When / Doors / P1P1`) drops `rounded-xl bg-gray-800`. Replacement: zero-radius box, 1px `--color-rule-heavy` border, `--color-paper-alt` fill, labels in small-caps micro-type (`--color-ink-faint`), values in mono with tabular-nums (`--color-ink`). Rows separated by a single-pixel `--color-rule` divider. Each row carries a 16×16 Silk glyph on the left (see §5).
 
-Reichenstein, "Web Design is 95% Typography" (ia.net, 2006).
+**4.2** The numbered steps drop filled amber circles. Replacement: bracketed mono markers `[01]`, `[02]`, `[03]` in `--color-amber`. Body text in `--color-ink-soft`.
 
-Butterick, *Practical Typography*, read online for free (butterick.com/practical-typography). Start with "Typography in ten minutes" and "Summary of key rules".
+**4.3** Buttons drop `rounded-lg`. Replacement: `rounded-sm` (or `rounded-none` for tool-strip buttons), 1px border in the relevant functional accent, flat fill, visible keyboard-shortcut hint (`Sign in ⏎`, `Register`). `accesskey` attributes mandated where a keyboard shortcut is exposed.
 
-Chimero, "The Web's Grain" (frankchimero.com, 2015). Twenty minutes. Re-read twice a year.
+**4.4** Links are visibly underlined in body text, rendered in `--color-dci-teal`. No hover-only underline. Keith's resilience rule.
 
-Wroblewski, *Mobile First* (A Book Apart, 2011). Still the cleanest argument for portrait-first.
+**4.5** Every form input shows a visible 1px border in `--color-rule-heavy`, fills with `--color-paper` (not `--color-paper-alt`), and exposes its focus ring in `--color-dci-teal`. `accent-color: var(--color-amber)` is set globally so native checkboxes and radios inherit the action colour.
 
-Keith, *Resilient Web Design* (resilientwebdesign.com, 2016, free online).
+**4.6** A persistent status bar is mandated on every authenticated screen: 28px tall, fixed to the viewport bottom, `--color-paper-alt` fill, 1px top border in `--color-rule-heavy`, content in mono at 12px. Shape: venue · date · round · player count · clock · connectivity dot. The dot is the Silk `bullet_green.png` / `bullet_yellow.png` / `bullet_red.png` per §5. The status bar is not applied to the landing page.
 
-Copeland, "Brutalist Web Design" (brutalist-web.design, 2016). Twenty minutes.
+**4.7** Motion is minimised. No bouncing, no spring easings, no entrance animations. Permitted: 120ms linear colour transitions on hover, and the browser's native `view-transition` for route changes. `@media (prefers-reduced-motion: reduce)` disables the latter.
 
-Wathan & Schoger, *Refactoring UI* (2018). The tactical reference for every decision not covered above.
+## 5. Icon mandate — famfamfam Silk
 
-Raskin, *The Humane Interface* (2000). Skim. Keep chapter 3 nearby.
+### 5.1 The set
 
-Victor, *Magic Ink* (worrydream.com, 2006). A longer read, but the single strongest argument for what the tournament-round screen should eventually become.
+Mark James's Silk icon set is mandated as Cubehall's sole raster icon system.
 
-## 7. Recommendations, in one page
+- Home page: <https://famfamfam.com/lab/icons/silk/>
+- Source mirror: <https://github.com/markjames/famfamfam-silk-icons>
+- Count: 999 icons
+- Native size: 16×16 PNG
+- License: Creative Commons Attribution 2.5 — <https://creativecommons.org/licenses/by/2.5/>
 
-Keep the current landing layout unchanged. Replace the default Tailwind font stack with Inter for body, a chosen mono for numerics, and a restrained display treatment. Turn on `tabular-nums` and `slashed-zero` globally. Pull the framework card away from rounded-card styling toward 1px-hairline, monospace-value, small-caps-label rows that read as a dialog out of tournament software. Replace the filled-circle step numerals with bracketed monospaced `[01]`-style markers. Harden the buttons: lose the pillow radius, add keyboard-shortcut hints, visible borders. Introduce a DCI-teal as the second accent, reserved for informational elements; keep amber for action, red for warning. Plan for a persistent status-bar footer on authenticated pages — it is not for the landing but it is the single strongest quote of WER's DNA once drafts are running. On phones, use `dvh` instead of `vh`, container queries for density-sensitive rows, and make sure every tabular number remains right-aligned at any width.
+CC BY 2.5 permits commercial use with attribution; it is strictly more permissive than the non-commercial licence you asked for, and therefore satisfies the requirement. Attribution is mandatory and specified in §5.4.
 
-Do not animate numbers. Do not bounce buttons. Do not hide information behind accordions. The tournament software we are echoing was trusted because it was still — and stillness, on a 390-pixel-wide screen held by someone mid-draft, is the rarest and most valuable quality we can offer.
+### 5.2 Installation — mandated path
+
+The pack is fetched by script and served as static assets.
+
+- Download mechanism: `packages/web/scripts/fetch-icons.sh` (provided in this mandate).
+- Static install path: `packages/web/public/icons/silk/*.png` (served at `/icons/silk/<name>.png`).
+- License copy: `packages/web/public/icons/silk/LICENSE-SILK.txt` (copied verbatim from the upstream `readme.txt`).
+- Favicon: `packages/web/public/favicon.ico` and `packages/web/public/favicon.png`, generated from `dice.png`.
+
+The script is idempotent. It must be run once after `pnpm install`, or wired into `package.json` as a `postinstall` hook at the maintainer's discretion.
+
+### 5.3 Icon → concept mapping (mandated)
+
+This table binds Silk filenames to Cubehall domain concepts. The mapping is canonical. A new concept requires an addition here before it appears in the UI.
+
+| Cubehall concept                | Silk filename                                   |
+|---------------------------------|-------------------------------------------------|
+| Brand / cube / draft / favicon  | `dice.png`                                      |
+| Individual player               | `user.png`                                      |
+| Pod / group of players          | `group.png`                                     |
+| Round / timer                   | `time.png` (primary), `hourglass.png` (running) |
+| Fixture date / Friday           | `calendar.png`                                  |
+| Venue                           | `house.png`                                     |
+| Sign in                         | `door_in.png`                                   |
+| Sign out                        | `door_out.png`                                  |
+| Pairings table                  | `table.png`                                     |
+| Print pairings                  | `printer.png`                                   |
+| Standings                       | `chart_bar.png`                                 |
+| Winner / trophy                 | `cup.png`                                       |
+| 1st / 2nd / 3rd place           | `medal_gold_1.png`, `_2.png`, `_3.png`          |
+| RSVP yes / confirmed            | `tick.png`                                      |
+| RSVP no / declined              | `cross.png`                                     |
+| Dropped from round              | `user_delete.png`                               |
+| Status OK                       | `bullet_green.png`                              |
+| Status pending                  | `bullet_yellow.png`                             |
+| Status error / disconnected     | `bullet_red.png`                                |
+| Settings                        | `cog.png`                                       |
+| Re-pair / refresh               | `arrow_refresh.png`                             |
+| Search player                   | `magnifier.png`                                 |
+| Document / report               | `page_white_text.png`                           |
+| Cube (the list of cards)        | `bricks.png`                                    |
+| Invite code                     | `key.png`                                       |
+| Audit log                       | `book.png`                                      |
+
+### 5.4 Attribution — mandated
+
+Attribution is required wherever Silk icons are rendered. Three mandated attribution points:
+
+1. **Footer link on every public page** — a small mono text link reading: *Icons by [Mark James](https://famfamfam.com/lab/icons/silk/), CC BY 2.5.*
+2. **`/colophon` route** — a plain HTML page listing all third-party assets, their authors, and their licences. Silk is the first entry.
+3. **`docs/design/icon-attribution.md`** in the repo — machine-parseable attribution manifest. Updated whenever an asset set is added or removed.
+
+The footer attribution shall render in `--color-ink-faint` at 11px mono, visually subordinate but present.
+
+### 5.5 Rendering rules
+
+Silk icons are 16×16 native. They render at 16×16 without scaling. If a larger glyph is required:
+
+- 32×32 is obtained by nearest-neighbour upscale (preserving the pixel grid). Render with `image-rendering: pixelated`.
+- Never anti-alias a Silk icon. Never render at a non-integer scale.
+- For hidpi displays, serve the native 16×16 at 1x and the 32×32 nearest-neighbour at 2x via an `srcset`, or set CSS `width: 16px; height: 16px; image-rendering: pixelated;` and let the browser handle it.
+
+Colour-overlaying Silk icons is forbidden. They ship with their own palette, and the palette is part of the aesthetic quotation. If a monochromatic icon is needed, use a plain text glyph or a purpose-made SVG — not a filtered Silk PNG.
+
+Mandated React component:
+
+```tsx
+// packages/web/app/components/Icon.tsx
+import type { ImgHTMLAttributes } from "react";
+
+export type SilkIcon =
+  | "dice" | "user" | "group" | "time" | "hourglass"
+  | "calendar" | "house" | "door_in" | "door_out"
+  | "table" | "printer" | "chart_bar" | "cup"
+  | "medal_gold_1" | "medal_gold_2" | "medal_gold_3"
+  | "tick" | "cross" | "user_delete"
+  | "bullet_green" | "bullet_yellow" | "bullet_red"
+  | "cog" | "arrow_refresh" | "magnifier"
+  | "page_white_text" | "bricks" | "key" | "book";
+
+interface IconProps extends Omit<ImgHTMLAttributes<HTMLImageElement>, "src"> {
+  name: SilkIcon;
+  size?: 16 | 32;
+}
+
+export function Icon({ name, size = 16, alt = "", ...rest }: IconProps) {
+  return (
+    <img
+      src={`/icons/silk/${name}.png`}
+      width={size}
+      height={size}
+      alt={alt}
+      style={size === 32 ? { imageRendering: "pixelated" } : undefined}
+      {...rest}
+    />
+  );
+}
+```
+
+Every icon usage in the codebase goes through this component. No direct `<img>` tags to Silk paths.
+
+### 5.6 Favicon — mandated
+
+- Primary: `packages/web/public/favicon.ico`, generated from `dice.png`, 16×16 single-frame ICO.
+- Secondary (Android, bookmarks): `packages/web/public/favicon.png`, the unaltered `dice.png`.
+- Apple touch icon: `packages/web/public/apple-touch-icon.png`, 180×180, nearest-neighbour upscale of `dice.png`.
+
+`packages/web/app/root.tsx` is updated to reference these paths and drop the emoji data-URL placeholder.
+
+## 6. What is dropped
+
+For avoidance of doubt:
+
+- `bg-gray-950`, `bg-gray-900`, `bg-gray-800` on surfaces — dropped.
+- `text-white`, `text-gray-100`, `text-gray-300`, `text-gray-400` — dropped, replaced with `--color-ink` / `--color-ink-soft` / `--color-ink-faint`.
+- `text-amber-400` — dropped, replaced with `--color-amber` (darker to clear contrast on cream).
+- `rounded-xl`, `rounded-lg` on buttons, cards, panels — dropped in favour of `rounded-sm` or `rounded-none`.
+- Emoji favicon (`🎲` as data-URL SVG) — dropped, replaced with Silk-derived ICO.
+- Any use of Heroicons, Lucide, Feather, or Phosphor anywhere in `packages/web` — forbidden going forward.
+- `prefers-color-scheme: dark` branches or tokens — forbidden.
+
+## 7. Portrait-first — unchanged
+
+Every mandate in this document holds on a 390×844 phone in portrait. Specifically:
+
+`100dvh` replaces `100vh` / `min-h-screen` for full-height regions.
+Container queries drive density-sensitive components (the framework card, the pairings row, the standings row) — wide container ⇒ label-left / value-right; narrow container ⇒ label-above / value-below. A single component serves both.
+Primary actions stay in the thumb zone (Wroblewski, 2011).
+Silk icons at 16×16 are readable on all tested device classes; 32×32 `image-rendering: pixelated` is used where an icon anchors a heading or a button.
+
+## 8. One-page summary
+
+Light-only, warm cream paper (`#FBF9F3`), near-black ink, two functional accents (amber for action, teal for information), dropped from the dark scheme entirely. Inter for body, JetBrains Mono for all numeric and ID content, `tabular-nums slashed-zero` globally. Framework panel becomes a hairline-bordered dialog; step markers become bracketed mono numerals; buttons lose pillow radius and gain shortcut hints; form inputs get visible borders; a persistent status bar is added to every authenticated screen. Silk icons (Mark James, CC BY 2.5) are mandated as the sole raster icon vocabulary, installed via `packages/web/scripts/fetch-icons.sh` to `packages/web/public/icons/silk/`, rendered at 16×16 native through a single `<Icon />` component, and attributed in the footer, `/colophon`, and `docs/design/icon-attribution.md`. Favicon is generated from `dice.png`.
+
+Nothing animates. Nothing bounces. Nothing hides. Landing-page layout is preserved verbatim.
