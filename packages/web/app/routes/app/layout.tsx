@@ -86,7 +86,7 @@ export default function AppLayout() {
                 Hitchhiker & Owl
               </p>
               <p className="text-xs text-gray-400">
-                Palmers Green, N13 &middot; Doors 18:30 &middot; P1P1 18:45
+                Palmers Green, N13 &middot; Doors 18:30 &middot; P1P1 18:45 &middot; £7 entry (venue credit)
               </p>
             </div>
             {nextFriday && (

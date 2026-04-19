@@ -21,10 +21,13 @@ export async function action({ request, params }: { request: Request; params: { 
   const formData = await request.formData();
   const intent = formData.get("intent") as string;
 
-  if (intent === "rsvp-in") {
+  if (intent === "rsvp-in" || intent === "rsvp-in-covered") {
     const result = await api.rsvp(params.fridayId, "in", ch);
     if (!result.ok) return { error: result.error.message };
-    return { success: "You're in!" };
+    const msg = intent === "rsvp-in-covered"
+      ? "You're in! The community has you covered."
+      : "You're in!";
+    return { success: msg };
   }
 
   if (intent === "rsvp-out") {
@@ -153,17 +156,28 @@ export default function FridayDetail() {
         )}
 
         {canRsvp && (
-          <div className="mt-3 flex gap-2">
+          <div className="mt-3 space-y-2">
             {!amIn ? (
-              <Form method="post">
-                <input type="hidden" name="intent" value="rsvp-in" />
-                <button
-                  type="submit"
-                  className="rounded-lg bg-green-600 px-6 py-3 text-base font-bold text-white hover:bg-green-500 min-h-[44px]"
-                >
-                  I'm in!
-                </button>
-              </Form>
+              <div className="flex gap-2">
+                <Form method="post">
+                  <input type="hidden" name="intent" value="rsvp-in" />
+                  <button
+                    type="submit"
+                    className="rounded-lg bg-green-600 px-6 py-3 text-base font-bold text-white hover:bg-green-500 min-h-[44px]"
+                  >
+                    I'm in! (£7)
+                  </button>
+                </Form>
+                <Form method="post">
+                  <input type="hidden" name="intent" value="rsvp-in-covered" />
+                  <button
+                    type="submit"
+                    className="rounded-lg border border-green-700 px-4 py-3 text-sm font-medium text-green-300 hover:bg-green-900/30 min-h-[44px]"
+                  >
+                    I'm in (can't afford)
+                  </button>
+                </Form>
+              </div>
             ) : (
               <Form method="post">
                 <input type="hidden" name="intent" value="rsvp-out" />

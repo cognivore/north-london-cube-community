@@ -51,7 +51,12 @@ export default function Landing() {
               <Detail label="When" value="Every Friday" />
               <Detail label="Doors" value="18:30" />
               <Detail label="P1P1" value="18:45" />
+              <Detail label="Entry" value="£7 → venue credit (food & drinks)" />
             </div>
+            <p className="mt-3 text-sm text-gray-500">
+              Can't afford the £7? RSVP with "Can't afford" and you will be
+              covered by the community, no questions asked.
+            </p>
           </div>
 
           <div>
