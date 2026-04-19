@@ -414,9 +414,28 @@ export const startRound = (podId: string, roundNumber: number) =>
       });
     }
 
-    // Mark round as in_progress
+    // Mark round as in_progress with running timer (50 min)
+    const deadline = unsafeISO8601(new Date(Date.parse(now) + 50 * 60 * 1000).toISOString());
+    const updatedRound = {
+      ...round,
+      state: "in_progress" as const,
+      startedAt: now,
+      timer: {
+        kind: "running" as const,
+        startedAt: now,
+        deadline,
+        elapsed: unsafeDuration(0),
+      },
+    };
     yield* roundRepo.updateState(round.id, "in_progress");
-    yield* roundRepo.update({ ...round, state: "in_progress", startedAt: now });
+    yield* roundRepo.update(updatedRound);
+
+    // Update pod state to playing if it's still drafting/building
+    const currentPod = yield* podRepo.findById(pid);
+    if (currentPod && (currentPod.state === "drafting" || currentPod.state === "building")) {
+      yield* podRepo.updateState(pid, "playing");
+    }
+
     yield* logger.info("Round started with pairings", { podId, roundNumber, matchCount: pairingResult.pairings.length });
 
     return { round, pairings: pairingResult.pairings };

@@ -73,9 +73,9 @@ export default function RoundView() {
           >
             <div className="flex items-center justify-between">
               <div className="text-sm">
-                <span className="font-medium text-ink">{m.player1Id}</span>
+                <span className="font-medium text-ink">{(data as any).players?.[m.player1Id]?.displayName ?? m.player1Id.slice(0, 8)}</span>
                 <span className="mx-2 text-ink-faint">vs</span>
-                <span className="font-medium text-ink">{m.player2Id}</span>
+                <span className="font-medium text-ink">{(data as any).players?.[m.player2Id]?.displayName ?? m.player2Id.slice(0, 8)}</span>
               </div>
               {m.result.kind === "reported" && (
                 <span className="text-sm font-mono text-amber">

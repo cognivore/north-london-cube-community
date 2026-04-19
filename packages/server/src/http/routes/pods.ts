@@ -84,7 +84,21 @@ pods.get("/:id/pairings", async (c) => {
         return { pairings: matches, round: currentRound };
       }),
     );
-    return c.json(data);
+
+    // Enrich with player names
+    let players: Record<string, { displayName: string; dciNumber: number | null }> = {};
+    try {
+      const { getDb, query } = await import("../../db/sqlite.js");
+      const db = await getDb();
+      const ids = new Set(data.pairings.flatMap((m: any) => [m.player1Id, m.player2Id]));
+      for (const uid of ids) {
+        const rows = query<{ display_name: string; dci_number: number | null }>(
+          db, "SELECT display_name, dci_number FROM users WHERE id = ?", [uid]);
+        if (rows[0]) players[uid as string] = { displayName: rows[0].display_name, dciNumber: rows[0].dci_number ?? null };
+      }
+    } catch {}
+
+    return c.json({ ...data, players });
   } catch {
     return apiError(c, 500, "INTERNAL", "Failed to load pairings");
   }
