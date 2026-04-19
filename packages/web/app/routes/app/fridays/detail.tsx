@@ -98,7 +98,7 @@ export default function FridayDetail() {
   const canRsvp = ["open", "enrollment_closed", "vote_open", "vote_closed"].includes(stateKind);
   const canEnroll = stateKind === "open";
   const canVote = stateKind === "vote_open";
-  const activeRsvps = rsvps.filter((r: any) => r.state === "in");
+  const activeRsvps = rsvps.filter((r: any) => ["pending", "confirmed", "locked", "seated"].includes(r.state));
   const activeEnrollments = enrollments.filter((e: any) => !e.withdrawn);
 
   // User's cubes that aren't already enrolled
@@ -108,7 +108,7 @@ export default function FridayDetail() {
   );
 
   const myRsvp = rsvps.find((r: any) => r.userId === currentUser?.id);
-  const amIn = myRsvp?.state === "in";
+  const amIn = myRsvp && ["pending", "confirmed", "locked", "seated"].includes(myRsvp.state);
 
   const date = new Date(friday.date + "T00:00:00");
   const formatted = date.toLocaleDateString("en-GB", {
@@ -168,15 +168,22 @@ export default function FridayDetail() {
 
         {activeRsvps.length > 0 && (
           <ul className="mt-2 space-y-1">
-            {activeRsvps.map((r: any) => (
-              <li key={r.id} className="text-sm text-ink-soft">
-                {r.userId === currentUser?.id ? (
-                  <span className="text-amber">You</span>
-                ) : (
-                  r.userId.slice(0, 8)
-                )}
-              </li>
-            ))}
+            {activeRsvps.map((r: any) => {
+              const player = (data as any).players?.[r.userId];
+              const name = player?.displayName ?? r.userId.slice(0, 8);
+              const isMe = r.userId === currentUser?.id;
+              const stateLabel = r.state === "pending" ? "pending" : r.state === "confirmed" || r.state === "locked" ? "confirmed" : "";
+              return (
+                <li key={r.id} className="flex items-center gap-2 text-sm">
+                  <span className={isMe ? "font-bold text-amber" : "text-ink-soft"}>{isMe ? "You" : name}</span>
+                  {stateLabel && (
+                    <span className={`text-xs mono ${r.state === "pending" ? "text-amber" : "text-ok"}`} data-mono>
+                      {stateLabel}
+                    </span>
+                  )}
+                </li>
+              );
+            })}
           </ul>
         )}
 
@@ -203,16 +210,21 @@ export default function FridayDetail() {
                   </button>
                 </Form>
               </div>
+            ) : myRsvp?.state === "pending" ? (
+              <div className="space-y-2">
+                <p className="text-sm text-amber">Your RSVP is pending — waiting for another player to pair up.</p>
+                <Form method="post">
+                  <input type="hidden" name="intent" value="rsvp-out" />
+                  <button
+                    type="submit"
+                    className="rounded-sm bg-paper border border-rule-heavy px-4 py-3 text-sm font-medium text-ink-soft hover:bg-paper-alt min-h-[44px]"
+                  >
+                    Withdraw (while pending)
+                  </button>
+                </Form>
+              </div>
             ) : (
-              <Form method="post">
-                <input type="hidden" name="intent" value="rsvp-out" />
-                <button
-                  type="submit"
-                  className="rounded-sm bg-paper border border-rule-heavy px-4 py-3 text-sm font-medium text-ink-soft hover:bg-paper-alt min-h-[44px]"
-                >
-                  Cancel RSVP
-                </button>
-              </Form>
+              <p className="text-sm text-ok font-medium">You're confirmed and locked in.</p>
             )}
           </div>
         )}

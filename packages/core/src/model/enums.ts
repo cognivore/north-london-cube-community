@@ -20,13 +20,13 @@ export const SYSTEM_ROLES = ["member", "coordinator"] as const;
 export type SystemRole = (typeof SYSTEM_ROLES)[number];
 
 export const RSVP_STATES = [
-  "in",
-  "out",
-  "waitlisted",
-  "seated",
-  "no_show",
-  "attended",
-  "cancelled_by_user",
+  "pending",           // said "I'm in" but total is odd — can still withdraw
+  "confirmed",         // total became even — 30-min lock timer started, email sent
+  "locked",            // 30 min passed — cannot withdraw
+  "seated",            // assigned to a pod at lock time
+  "attended",          // post-event: showed up
+  "no_show",           // post-event: didn't show up
+  "cancelled_by_user", // withdrew before lock
 ] as const;
 export type RsvpState = (typeof RSVP_STATES)[number];
 
