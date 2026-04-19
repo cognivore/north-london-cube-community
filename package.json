@@ -1,0 +1,25 @@
+{
+  "name": "cubehall",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "pnpm -r run build",
+    "dev": "pnpm -r --parallel run dev",
+    "dev:server": "pnpm --filter @cubehall/server run dev",
+    "dev:web": "pnpm --filter @cubehall/web run dev",
+    "test": "pnpm -r run test",
+    "test:core": "pnpm --filter @cubehall/core run test",
+    "test:server": "pnpm --filter @cubehall/server run test",
+    "test:e2e": "pnpm --filter @cubehall/web run test:e2e",
+    "lint": "pnpm -r run lint",
+    "typecheck": "pnpm -r run typecheck",
+    "db:migrate": "pnpm --filter @cubehall/server run db:migrate",
+    "db:rollback": "pnpm --filter @cubehall/server run db:rollback",
+    "clean": "pnpm -r run clean"
+  },
+  "engines": {
+    "node": ">=22.0.0",
+    "pnpm": ">=9.0.0"
+  },
+  "packageManager": "pnpm@9.15.4"
+}

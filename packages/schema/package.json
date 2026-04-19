@@ -1,0 +1,25 @@
+{
+  "name": "@cubehall/schema",
+  "version": "0.1.0",
+  "type": "module",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@cubehall/core": "workspace:*",
+    "zod": "^3.24.4"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.2",
+    "vitest": "^3.1.1"
+  }
+}

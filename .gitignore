@@ -1,0 +1,16 @@
+node_modules/
+dist/
+.turbo/
+*.tsbuildinfo
+.env
+.env.local
+.env.production
+.DS_Store
+coverage/
+.nyc_output/
+playwright-report/
+test-results/
+*.log
+.cache/
+build/
+.react-router/
