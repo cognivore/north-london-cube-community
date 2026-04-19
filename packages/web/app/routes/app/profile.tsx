@@ -118,9 +118,22 @@ export default function Profile() {
         </button>
       </Form>
 
+      {/* DCI card */}
+      {user.dciNumber != null && (
+        <div className="border border-rule-heavy bg-paper-alt p-4 flex items-center gap-3">
+          <img src="/icons/dci-32.png" width={32} height={32} alt="DCI" style={{ imageRendering: "auto" }} />
+          <div>
+            <p className="text-xs text-ink-faint uppercase tracking-wider" style={{ fontVariant: "small-caps" }}>Duelist Cuber Identifier</p>
+            <p className="mono text-xl font-bold text-ink" data-mono>
+              {String(user.dciNumber).padStart(5, "0")}
+            </p>
+          </div>
+        </div>
+      )}
+
       <div className="border-t border-rule pt-4">
-        <p className="text-xs text-ink-faint">
-          Email: {user.email} | Role: {user.role} | No-shows: {user.profile.noShowCount}
+        <p className="mono text-xs text-ink-faint" data-mono style={{ fontSize: "11px" }}>
+          {user.email} &middot; {user.role} &middot; no-shows: {user.profile.noShowCount}
         </p>
       </div>
     </div>

@@ -19,6 +19,7 @@ const SCHEMA = `
     id TEXT PRIMARY KEY,
     email TEXT NOT NULL UNIQUE,
     display_name TEXT NOT NULL,
+    dci_number INTEGER,
     created_at TEXT NOT NULL,
     auth_state TEXT NOT NULL DEFAULT '{"kind":"verified"}',
     profile TEXT NOT NULL DEFAULT '{}',

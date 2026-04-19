@@ -104,6 +104,26 @@ export const register = (input: {
 
     yield* userRepo.create(user);
     yield* inviteRepo.incrementUsage(input.inviteCode);
+
+    // Assign DCI number
+    yield* Effect.tryPromise({
+      try: async () => {
+        const { getDb, query: dbQuery, run: dbRun, persist: dbPersist } = await import("../db/sqlite.js");
+        const db = await getDb();
+        // Count existing users with DCI numbers
+        const countResult = dbQuery<{ cnt: number }>(db, "SELECT count(*) as cnt FROM users WHERE dci_number IS NOT NULL");
+        const assigned = countResult[0]?.cnt ?? 0;
+        // First 8 get sequential 1-8, then jump to 100+
+        const dciNumber = assigned < 8 ? assigned + 1 : 100 + (assigned - 8);
+        dbRun(db, "UPDATE users SET dci_number = ? WHERE id = ?", [dciNumber, userId]);
+        dbPersist();
+      },
+      catch: (e) => {
+        console.error("Failed to assign DCI number:", e);
+        return undefined as never;
+      },
+    });
+
     yield* logger.info("User registered", { userId, email: input.email });
 
     // Send magic link email

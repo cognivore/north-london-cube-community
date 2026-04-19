@@ -15,10 +15,18 @@ import { unsafeNonNegativeInt } from "@cubehall/core";
 
 const me = new Hono<AppEnv>();
 
-// GET /api/me — current user
+// GET /api/me — current user + DCI number
 me.get("/", authMiddleware(), async (c) => {
   const user = c.get("user");
-  return c.json({ user });
+  // Fetch DCI number from DB (not in the core User type)
+  let dciNumber: number | null = null;
+  try {
+    const { getDb, query } = await import("../../db/sqlite.js");
+    const db = await getDb();
+    const rows = query<{ dci_number: number | null }>(db, "SELECT dci_number FROM users WHERE id = ?", [user.id]);
+    dciNumber = rows[0]?.dci_number ?? null;
+  } catch {}
+  return c.json({ user: { ...user, dciNumber } });
 });
 
 // PATCH /api/me — update profile
