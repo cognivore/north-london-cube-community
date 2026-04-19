@@ -1,10 +1,27 @@
 import { Link, useLoaderData } from "react-router";
+import { Icon } from "../../components/Icon";
 import { api, cookieHeader } from "../../lib/api";
 
 export async function loader({ request }: { request: Request }) {
   const ch = { headers: cookieHeader(request) };
   const result = await api.listFridays(ch);
-  return { fridays: result.ok ? result.data.fridays : [] };
+  const fridays = result.ok ? result.data.fridays : [];
+
+  // Fetch counts only for open/active fridays
+  const enriched = await Promise.all(
+    fridays.map(async (f: any) => {
+      if (f.state.kind === "scheduled") return f;
+      const detail = await api.getFriday(f.id, ch);
+      if (!detail.ok) return f;
+      return {
+        ...f,
+        rsvpCount: detail.data.rsvps.filter((r: any) => r.state === "in").length,
+        cubeCount: detail.data.enrollments.filter((e: any) => !e.withdrawn).length,
+      };
+    }),
+  );
+
+  return { fridays: enriched };
 }
 
 export default function AppHome() {
@@ -57,6 +74,18 @@ function FridayCard({ friday, compact }: { friday: any; compact?: boolean }) {
           </p>
           <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
             <StateChip state={friday.state.kind} />
+            {friday.rsvpCount != null && (
+              <span className="flex items-center gap-1 text-ink-faint">
+                <Icon name="user" size={16} />
+                <span className="mono font-bold text-ink" data-mono>{friday.rsvpCount}</span>
+              </span>
+            )}
+            {friday.cubeCount != null && (
+              <span className="flex items-center gap-1 text-ink-faint">
+                <Icon name="bricks" size={16} />
+                <span className="mono font-bold text-ink" data-mono>{friday.cubeCount}</span>
+              </span>
+            )}
           </div>
         </div>
         <span className="shrink-0 text-ink-faint">&rarr;</span>
