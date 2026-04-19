@@ -37,7 +37,7 @@ export default function Profile() {
 
   const formats = [
     "swiss_draft", "team_draft_2v2", "team_draft_3v3", "team_draft_4v4",
-    "rochester", "winston", "winchester", "grid", "glimpse", "sealed",
+    "rochester", "housman", "grid", "glimpse", "sealed",
   ];
 
   return (
