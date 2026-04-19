@@ -1,21 +1,24 @@
 import { Form, useLoaderData, useActionData } from "react-router";
 import { useEffect, useState } from "react";
-import { api } from "../../../lib/api";
+import { api, cookieHeader, SERVER_API_BASE } from "../../../lib/api";
 
-export async function loader({ params }: { params: { podId: string; roundNumber: string } }) {
-  const podResult = await api.getPod(params.podId);
+export async function loader({ request, params }: { request: Request; params: { podId: string; roundNumber: string } }) {
+  const ch = { headers: cookieHeader(request) };
+  const podResult = await api.getPod(params.podId, ch);
   if (!podResult.ok) throw new Response("Not found", { status: 404 });
 
-  const pairingsResult = await api.getPairings(params.podId);
+  const pairingsResult = await api.getPairings(params.podId, ch);
   return {
     ...podResult.data,
     pairings: pairingsResult.ok ? pairingsResult.data.pairings : [],
+    players: pairingsResult.ok ? (pairingsResult.data as any).players ?? {} : {},
     currentRound: pairingsResult.ok ? pairingsResult.data.round : null,
     roundNumber: parseInt(params.roundNumber, 10),
   };
 }
 
 export async function action({ request, params }: { request: Request; params: { podId: string } }) {
+  const ch = cookieHeader(request);
   const formData = await request.formData();
   const intent = formData.get("intent") as string;
 
@@ -25,16 +28,9 @@ export async function action({ request, params }: { request: Request; params: { 
     const p2Wins = parseInt(formData.get("p2Wins") as string, 10);
     const draws = parseInt(formData.get("draws") as string, 10);
 
-    const result = await api.reportMatch(matchId, { p1Wins, p2Wins, draws });
+    const result = await api.reportMatch(matchId, { p1Wins, p2Wins, draws }, { headers: ch });
     if (!result.ok) return { error: result.error.message };
     return { success: "Result reported!" };
-  }
-
-  if (intent === "start-round") {
-    const roundNumber = parseInt(formData.get("roundNumber") as string, 10);
-    const result = await api.startRound(params.podId, roundNumber);
-    if (!result.ok) return { error: result.error.message };
-    return { success: "Round started!" };
   }
 
   return null;

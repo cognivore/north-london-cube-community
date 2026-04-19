@@ -134,18 +134,22 @@ export const api = {
   getPod: (id: string, extra?: RequestInit) =>
     apiFetch<{ pod: any; seats: any[]; rounds: any[]; matches: any[]; players?: any }>(`/api/pods/${id}`, extra),
 
-  getPairings: (podId: string) =>
-    apiFetch<{ pairings: any[]; round: any }>(`/api/pods/${podId}/pairings`),
+  getPairings: (podId: string, extra?: RequestInit) =>
+    apiFetch<{ pairings: any[]; round: any }>(`/api/pods/${podId}/pairings`, extra),
 
-  startRound: (podId: string, roundNumber: number) =>
+  startRound: (podId: string, roundNumber: number, extra?: RequestInit) =>
     apiFetch<{ round: any }>(`/api/pods/${podId}/rounds/${roundNumber}/start`, {
       method: "POST",
+      ...extra,
+      headers: { ...extra?.headers },
     }),
 
-  reportMatch: (matchId: string, data: { p1Wins: number; p2Wins: number; draws: number }) =>
+  reportMatch: (matchId: string, data: { p1Wins: number; p2Wins: number; draws: number }, extra?: RequestInit) =>
     apiFetch<{ result: any }>(`/api/pods/matches/${matchId}/result`, {
       method: "POST",
       body: JSON.stringify(data),
+      ...extra,
+      headers: { ...extra?.headers },
     }),
 
   // Venues
