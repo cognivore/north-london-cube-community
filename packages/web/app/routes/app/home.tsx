@@ -1,27 +1,10 @@
 import { Link, useLoaderData } from "react-router";
-import { Icon } from "../../components/Icon";
 import { api, cookieHeader } from "../../lib/api";
 
 export async function loader({ request }: { request: Request }) {
   const ch = { headers: cookieHeader(request) };
   const result = await api.listFridays(ch);
-  const fridays = result.ok ? result.data.fridays : [];
-
-  // Fetch detail (RSVP + enrollment counts) for the first 8 fridays
-  const details = await Promise.all(
-    fridays.slice(0, 8).map(async (f: any) => {
-      const detail = await api.getFriday(f.id, ch);
-      if (!detail.ok) return { ...f, rsvpCount: 0, cubeCount: 0 };
-      const rsvpCount = detail.data.rsvps.filter((r: any) => r.state === "in").length;
-      const cubeCount = detail.data.enrollments.filter((e: any) => !e.withdrawn).length;
-      return { ...f, rsvpCount, cubeCount };
-    }),
-  );
-
-  // Remaining fridays without detail
-  const rest = fridays.slice(8).map((f: any) => ({ ...f, rsvpCount: null, cubeCount: null }));
-
-  return { fridays: [...details, ...rest] };
+  return { fridays: result.ok ? result.data.fridays : [] };
 }
 
 export default function AppHome() {
@@ -74,18 +57,6 @@ function FridayCard({ friday, compact }: { friday: any; compact?: boolean }) {
           </p>
           <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
             <StateChip state={friday.state.kind} />
-            {friday.rsvpCount != null && (
-              <span className="flex items-center gap-1 text-ink-faint">
-                <Icon name="user" size={16} />
-                <span className="mono font-bold text-ink" data-mono>{friday.rsvpCount}</span>
-              </span>
-            )}
-            {friday.cubeCount != null && (
-              <span className="flex items-center gap-1 text-ink-faint">
-                <Icon name="bricks" size={16} />
-                <span className="mono font-bold text-ink" data-mono>{friday.cubeCount}</span>
-              </span>
-            )}
           </div>
         </div>
         <span className="shrink-0 text-ink-faint">&rarr;</span>
@@ -110,7 +81,7 @@ function StateChip({ state }: { state: string }) {
 
   return (
     <span className={`inline-block rounded-sm px-1.5 py-0.5 text-xs font-medium ${colors[state] ?? "text-ink-faint bg-paper-sunken"}`}>
-      {state.replace(/_/g, " ")}
+      {state === "scheduled" ? "planned" : state.replace(/_/g, " ")}
     </span>
   );
 }
