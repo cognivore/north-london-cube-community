@@ -9,7 +9,20 @@ export async function loader({ request, params }: { request: Request; params: { 
     api.me(ch),
   ]);
   if (!podResult.ok) throw new Response("Not found", { status: 404 });
-  return { ...podResult.data, user: meResult.ok ? meResult.data.user : null };
+
+  // Fetch standings
+  let standings: any[] = [];
+  try {
+    const standingsRes = await fetch(`${SERVER_API_BASE}/api/lifecycle/pods/${params.podId}/standings`, {
+      headers: cookieHeader(request),
+    });
+    if (standingsRes.ok) {
+      const data = await standingsRes.json();
+      standings = data.standings ?? [];
+    }
+  } catch {}
+
+  return { ...podResult.data, user: meResult.ok ? meResult.data.user : null, standings };
 }
 
 export async function action({ request, params }: { request: Request; params: { podId: string } }) {
@@ -55,7 +68,7 @@ export async function action({ request, params }: { request: Request; params: { 
 }
 
 export default function PodDetail() {
-  const { pod, seats, rounds, players, user } = useLoaderData<typeof loader>();
+  const { pod, seats, rounds, players, user, standings } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
   const isCoordinator = user?.role === "coordinator";
   const isHost = user?.id === pod.hostId;
@@ -179,6 +192,45 @@ export default function PodDetail() {
           </Link>
         ))}
       </section>
+
+      {/* Standings */}
+      {standings.length > 0 && (
+        <section className="rounded-sm border border-rule bg-paper-alt p-4">
+          <h2 className="text-lg font-semibold text-ink">
+            <Icon name="chart_bar" size={16} /> Standings
+          </h2>
+          <table className="mt-2 w-full text-sm">
+            <thead>
+              <tr className="border-b border-rule text-left text-xs text-ink-faint uppercase tracking-wider">
+                <th className="py-1 pr-2" style={{ fontVariant: "small-caps" }}>Rank</th>
+                <th className="py-1 pr-2" style={{ fontVariant: "small-caps" }}>Player</th>
+                <th className="py-1 pr-2 text-right" style={{ fontVariant: "small-caps" }}>Pts</th>
+                <th className="py-1 pr-2 text-right" style={{ fontVariant: "small-caps" }}>OMW%</th>
+                <th className="py-1 text-right" style={{ fontVariant: "small-caps" }}>GW%</th>
+              </tr>
+            </thead>
+            <tbody>
+              {standings.map((s: any, i: number) => {
+                const player = (players as any)?.[s.userId];
+                const name = player?.displayName ?? s.userId?.slice(0, 8) ?? "?";
+                return (
+                  <tr key={s.userId ?? i} className="border-b border-rule last:border-0">
+                    <td className="py-1.5 pr-2 mono text-ink-faint" data-mono>{s.rank}</td>
+                    <td className="py-1.5 pr-2 font-medium text-ink">{name}</td>
+                    <td className="py-1.5 pr-2 text-right mono font-bold text-ink" data-mono>{s.matchPoints}</td>
+                    <td className="py-1.5 pr-2 text-right mono text-ink-faint" data-mono>
+                      {(s.omwPercent * 100).toFixed(1)}%
+                    </td>
+                    <td className="py-1.5 text-right mono text-ink-faint" data-mono>
+                      {(s.gwPercent * 100).toFixed(1)}%
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </section>
+      )}
     </div>
   );
 }

@@ -69,9 +69,9 @@ export default function RoundView() {
           >
             <div className="flex items-center justify-between">
               <div className="text-sm">
-                <PlayerName player={(data as any).players?.[m.player1Id]} fallback={m.player1Id} />
+                <PlayerName player={(data as any).players?.[m.player1Id]} fallback={m.player1Id} pts={(data as any).points?.[m.player1Id]} />
                 <span className="mx-2 text-ink-faint">vs</span>
-                <PlayerName player={(data as any).players?.[m.player2Id]} fallback={m.player2Id} />
+                <PlayerName player={(data as any).players?.[m.player2Id]} fallback={m.player2Id} pts={(data as any).points?.[m.player2Id]} />
               </div>
               {m.result.kind === "reported" && (
                 <span className="text-sm font-mono text-amber">
@@ -188,15 +188,14 @@ function TimerDisplay({ podId }: { podId: string }) {
   );
 }
 
-function PlayerName({ player, fallback }: { player: any; fallback: string }) {
+function PlayerName({ player, fallback, pts }: { player: any; fallback: string; pts?: number }) {
   const name = player?.displayName ?? fallback.slice(0, 8);
-  const dci = player?.dciNumber;
   return (
     <span className="inline-flex items-center gap-1">
       <span className="font-medium text-ink">{name}</span>
-      {dci != null && (
+      {pts != null && (
         <span className="mono text-xs text-ink-faint" data-mono>
-          #{String(dci).padStart(5, "0")}
+          ({pts} pts)
         </span>
       )}
     </span>

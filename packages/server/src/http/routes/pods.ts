@@ -98,7 +98,29 @@ pods.get("/:id/pairings", async (c) => {
       }
     } catch {}
 
-    return c.json({ ...data, players });
+    // Compute match points per player from ALL matches in this pod
+    let pointsMap: Record<string, number> = {};
+    try {
+      const { getDb, query } = await import("../../db/sqlite.js");
+      const db = await getDb();
+      // Get all matches across all rounds in this pod
+      const allMatches = query<{ player1_id: string; player2_id: string; result: string }>(db,
+        `SELECT m.player1_id, m.player2_id, m.result FROM matches m
+         JOIN rounds r ON m.round_id = r.id WHERE r.pod_id = ?`, [podId]);
+      for (const m of allMatches) {
+        const res = JSON.parse(m.result);
+        if (res.kind !== "reported") continue;
+        const p1 = m.player1_id;
+        const p2 = m.player2_id;
+        pointsMap[p1] = (pointsMap[p1] ?? 0);
+        pointsMap[p2] = (pointsMap[p2] ?? 0);
+        if (res.p1Wins > res.p2Wins) pointsMap[p1] += 3;
+        else if (res.p2Wins > res.p1Wins) pointsMap[p2] += 3;
+        else { pointsMap[p1] += 1; pointsMap[p2] += 1; }
+      }
+    } catch {}
+
+    return c.json({ ...data, players, points: pointsMap });
   } catch {
     return apiError(c, 500, "INTERNAL", "Failed to load pairings");
   }
