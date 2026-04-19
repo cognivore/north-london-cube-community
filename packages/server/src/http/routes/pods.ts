@@ -39,7 +39,26 @@ pods.get("/:id", async (c) => {
     if (!detail) {
       return apiError(c, 404, "NOT_FOUND", "Pod not found");
     }
-    return c.json(detail);
+
+    // Enrich with player names + DCI numbers
+    let players: Record<string, { displayName: string; dciNumber: number | null }> = {};
+    try {
+      const { getDb, query } = await import("../../db/sqlite.js");
+      const db = await getDb();
+      for (const s of detail.seats) {
+        const rows = query<{ display_name: string; dci_number: number | null }>(
+          db, "SELECT display_name, dci_number FROM users WHERE id = ?", [s.userId],
+        );
+        if (rows[0]) {
+          players[s.userId as string] = {
+            displayName: rows[0].display_name,
+            dciNumber: rows[0].dci_number ?? null,
+          };
+        }
+      }
+    } catch {}
+
+    return c.json({ ...detail, players });
   } catch {
     return apiError(c, 500, "INTERNAL", "Failed to load pod");
   }

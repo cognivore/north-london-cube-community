@@ -131,8 +131,8 @@ export const api = {
     }),
 
   // Pods
-  getPod: (id: string) =>
-    apiFetch<{ pod: any; seats: any[]; rounds: any[]; matches: any[] }>(`/api/pods/${id}`),
+  getPod: (id: string, extra?: RequestInit) =>
+    apiFetch<{ pod: any; seats: any[]; rounds: any[]; matches: any[]; players?: any }>(`/api/pods/${id}`, extra),
 
   getPairings: (podId: string) =>
     apiFetch<{ pairings: any[]; round: any }>(`/api/pods/${podId}/pairings`),

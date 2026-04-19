@@ -1,14 +1,15 @@
 import { Link, useLoaderData } from "react-router";
-import { api } from "../../../lib/api";
+import { api, cookieHeader } from "../../../lib/api";
 
-export async function loader({ params }: { params: { podId: string } }) {
-  const result = await api.getPod(params.podId);
+export async function loader({ request, params }: { request: Request; params: { podId: string } }) {
+  const ch = { headers: cookieHeader(request) };
+  const result = await api.getPod(params.podId, ch);
   if (!result.ok) throw new Response("Not found", { status: 404 });
   return result.data;
 }
 
 export default function PodDetail() {
-  const { pod, seats, rounds, matches } = useLoaderData<typeof loader>();
+  const { pod, seats, rounds, players } = useLoaderData<typeof loader>();
 
   return (
     <div className="space-y-6">
@@ -25,17 +26,32 @@ export default function PodDetail() {
       <section className="rounded-sm border border-rule bg-paper-alt p-4">
         <h2 className="text-lg font-semibold text-ink">Seats</h2>
         <div className="mt-2 grid grid-cols-2 gap-2">
-          {seats.map((s: any) => (
-            <div key={s.seatIndex} className="rounded-sm bg-paper-sunken px-3 py-2 text-sm">
-              <span className="font-mono text-ink-faint">#{s.seatIndex}</span>{" "}
-              <span className="text-ink">{s.userId}</span>
-              {s.team && (
-                <span className={`ml-1 text-xs font-bold ${s.team === "A" ? "text-dci-teal" : "text-warn"}`}>
-                  Team {s.team}
-                </span>
-              )}
-            </div>
-          ))}
+          {seats.map((s: any) => {
+            const player = (players as any)?.[s.userId];
+            const name = player?.displayName ?? s.userId.slice(0, 8);
+            const dci = player?.dciNumber;
+            return (
+              <div key={s.seatIndex} className="rounded-sm bg-paper-sunken px-3 py-2 text-sm">
+                <div className="flex items-center gap-1">
+                  <span className="mono text-ink-faint" data-mono>#{s.seatIndex}</span>
+                  {s.team && (
+                    <span className={`text-xs font-bold ${s.team === "A" ? "text-dci-teal" : "text-warn"}`}>
+                      {s.team}
+                    </span>
+                  )}
+                </div>
+                <p className="font-medium text-ink">{name}</p>
+                {dci != null && (
+                  <div className="mt-0.5 flex items-center gap-1">
+                    <img src="/icons/dci-16.png" width={16} height={16} alt="DCI" />
+                    <span className="mono text-xs text-ink-faint" data-mono>
+                      {String(dci).padStart(5, "0")}
+                    </span>
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
       </section>
 
