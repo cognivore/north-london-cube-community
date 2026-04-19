@@ -34,19 +34,29 @@ testmode.post("/phony-users", authMiddleware(), async (c) => {
   const body = await c.req.json();
   const count = body.count ?? 4;
   const fridayId = body.fridayId;
-  const names = [
+  const firstNames = [
     "Alex", "Blake", "Casey", "Drew", "Ellis", "Finley", "Gray", "Harper",
     "Ira", "Jules", "Kit", "Lane", "Morgan", "Nat", "Oakley", "Pat",
   ];
-
-  const users: Array<{ id: string; email: string; displayName: string }> = [];
+  const surnames = [
+    "Budde", "Finkel", "Nassif", "Wafo-Tapa", "Karsten", "Juza", "Duke",
+    "Calcano", "Shenhar", "Manfield", "Stark", "Jensen", "Turtenwald",
+    "Hayne", "Levy", "Sigrist", "Watanabe", "Yukuhiro", "Damo da Rosa",
+    "Dominguez", "Floch", "Strasky", "Mengucci", "Cifka", "Dezani",
+  ];
 
   const db = await getDb();
+  const existingCount = query<{ cnt: number }>(db, "SELECT count(*) as cnt FROM users WHERE email LIKE 'phony-%'");
+  const nameOffset = existingCount[0]?.cnt ?? 0;
+
+  const users: Array<{ id: string; email: string; displayName: string }> = [];
   const now = new Date().toISOString();
 
   for (let i = 0; i < count; i++) {
     const id = crypto.randomUUID();
-    const name = names[i % names.length]! + (i >= names.length ? ` ${Math.floor(i / names.length) + 1}` : "");
+    const fi = (nameOffset + i) % firstNames.length;
+    const si = Math.floor((nameOffset + i) / firstNames.length) % surnames.length;
+    const name = `${firstNames[fi]} ${surnames[si]}`;
     const email = `phony-${id.slice(0, 8)}@test.local`;
 
     run(db, `INSERT INTO users (id, email, display_name, created_at, auth_state, profile, role) VALUES (?, ?, ?, ?, ?, ?, ?)`, [

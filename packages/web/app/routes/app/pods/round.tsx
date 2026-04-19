@@ -69,9 +69,9 @@ export default function RoundView() {
           >
             <div className="flex items-center justify-between">
               <div className="text-sm">
-                <span className="font-medium text-ink">{(data as any).players?.[m.player1Id]?.displayName ?? m.player1Id.slice(0, 8)}</span>
+                <PlayerName player={(data as any).players?.[m.player1Id]} fallback={m.player1Id} />
                 <span className="mx-2 text-ink-faint">vs</span>
-                <span className="font-medium text-ink">{(data as any).players?.[m.player2Id]?.displayName ?? m.player2Id.slice(0, 8)}</span>
+                <PlayerName player={(data as any).players?.[m.player2Id]} fallback={m.player2Id} />
               </div>
               {m.result.kind === "reported" && (
                 <span className="text-sm font-mono text-amber">
@@ -185,5 +185,20 @@ function TimerDisplay({ podId }: { podId: string }) {
     <div className="rounded-sm bg-paper-alt p-4 text-center text-ink-faint">
       Round complete
     </div>
+  );
+}
+
+function PlayerName({ player, fallback }: { player: any; fallback: string }) {
+  const name = player?.displayName ?? fallback.slice(0, 8);
+  const dci = player?.dciNumber;
+  return (
+    <span className="inline-flex items-center gap-1">
+      <span className="font-medium text-ink">{name}</span>
+      {dci != null && (
+        <span className="mono text-xs text-ink-faint" data-mono>
+          #{String(dci).padStart(5, "0")}
+        </span>
+      )}
+    </span>
   );
 }
