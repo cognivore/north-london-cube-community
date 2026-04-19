@@ -76,6 +76,7 @@ const SCHEMA = `
     friday_id TEXT NOT NULL REFERENCES fridays(id),
     user_id TEXT NOT NULL REFERENCES users(id),
     state TEXT NOT NULL DEFAULT 'in',
+    covered INTEGER NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL,
     last_transition_at TEXT NOT NULL,
     UNIQUE(friday_id, user_id)

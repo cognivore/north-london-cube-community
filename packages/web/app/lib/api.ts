@@ -77,11 +77,10 @@ export const api = {
   getFriday: (id: string, extra?: RequestInit) =>
     apiFetch<{ friday: any; enrollments: any[]; rsvps: any[]; pods: any[] }>(`/api/fridays/${id}`, extra),
 
-  rsvp: (fridayId: string, action: "in" | "out", extra?: RequestInit) =>
+  rsvp: (fridayId: string, action: "in" | "out", extra?: RequestInit & { covered?: boolean }) =>
     apiFetch<{ rsvp: any }>(`/api/fridays/${fridayId}/rsvp`, {
       method: "POST",
-      body: JSON.stringify({ action }),
-      ...extra,
+      body: JSON.stringify({ action, covered: extra?.covered ?? false }),
       headers: { ...extra?.headers },
     }),
 

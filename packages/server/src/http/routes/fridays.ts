@@ -104,7 +104,7 @@ fridays.post("/:id/rsvp", authMiddleware(), async (c) => {
 
   try {
     if (body.action === "in") {
-      const rsvp = await run(rsvpIn({ fridayId: fridayId!, userId: user.id }));
+      const rsvp = await run(rsvpIn({ fridayId: fridayId!, userId: user.id, covered: !!body.covered }));
       return c.json({ rsvp }, 201);
     } else if (body.action === "out") {
       const rsvp = await run(rsvpOut({ fridayId: fridayId!, userId: user.id }));
@@ -153,6 +153,23 @@ fridays.post("/:id/enrollments", authMiddleware(), async (c) => {
       return apiError(c, 409, "NOT_ACCEPTED", `Enrollments not accepted in state: ${fridayState}`);
     }
     return apiError(c, 500, "INTERNAL", "Enrollment failed");
+  }
+});
+
+// GET /api/fridays/:id/covered-count — coordinator only
+fridays.get("/:id/covered-count", authMiddleware(), async (c) => {
+  const user = c.get("user");
+  if (user.role !== "coordinator") {
+    return apiError(c, 403, "FORBIDDEN", "Coordinator only");
+  }
+  const fridayId = c.req.param("id")!;
+  try {
+    const { getDb, query } = await import("../../db/sqlite.js");
+    const db = await getDb();
+    const result = query<{ cnt: number }>(db, "SELECT count(*) as cnt FROM rsvps WHERE friday_id = ? AND covered = 1 AND state = 'in'", [fridayId]);
+    return c.json({ count: result[0]?.cnt ?? 0 });
+  } catch {
+    return c.json({ count: 0 });
   }
 });
 

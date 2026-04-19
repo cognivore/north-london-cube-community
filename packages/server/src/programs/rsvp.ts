@@ -32,7 +32,7 @@ export type RsvpError =
 // RSVP In
 // ---------------------------------------------------------------------------
 
-export const rsvpIn = (input: { fridayId: string; userId: string }) =>
+export const rsvpIn = (input: { fridayId: string; userId: string; covered?: boolean }) =>
   Effect.gen(function* () {
     const clock = yield* Clock;
     const rng = yield* RNG;
@@ -92,7 +92,38 @@ export const rsvpIn = (input: { fridayId: string; userId: string }) =>
     };
 
     yield* rsvpRepo.create(rsvp);
-    yield* logger.info("RSVP created", { fridayId: input.fridayId, userId: input.userId });
+
+    // Store covered flag directly in DB
+    if (input.covered) {
+      yield* Effect.tryPromise({
+        try: async () => {
+          const { getDb, run: dbRun, persist: dbPersist } = await import("../db/sqlite.js");
+          const db = await getDb();
+          dbRun(db, "UPDATE rsvps SET covered = 1 WHERE id = ?", [rsvpId]);
+          dbPersist();
+        },
+        catch: () => ({ kind: "db_error" as const, cause: "covered update failed" }),
+      });
+
+      // Email coordinators
+      yield* Effect.tryPromise({
+        try: async () => {
+          const { getDb, query: dbQuery } = await import("../db/sqlite.js");
+          const db = await getDb();
+          const coordinators = dbQuery<{ email: string }>(db, "SELECT email FROM users WHERE role = 'coordinator'");
+          const { sendMagicLinkEmail } = await import("../email/sendgrid.js"); // reuse the transport
+          for (const coord of coordinators) {
+            await sendCoveredNotification(coord.email, input.fridayId);
+          }
+        },
+        catch: (e) => {
+          console.error("Failed to notify coordinators:", e);
+          return undefined as never;
+        },
+      });
+    }
+
+    yield* logger.info("RSVP created", { fridayId: input.fridayId, userId: input.userId, covered: !!input.covered });
     yield* audit.record({
       actorId: userId,
       subject: { kind: "rsvp", id: rsvpId },
@@ -153,3 +184,39 @@ export const rsvpOut = (input: { fridayId: string; userId: string }) =>
 
     return { ...existing, state: "cancelled_by_user" as RsvpState, lastTransitionAt: now };
   });
+
+// ---------------------------------------------------------------------------
+// Notify coordinators about covered RSVPs
+// ---------------------------------------------------------------------------
+
+async function sendCoveredNotification(coordinatorEmail: string, fridayId: string): Promise<void> {
+  const SENDGRID_API_KEY = process.env.SENDGRID_API_KEY ?? "";
+  const FROM_EMAIL = process.env.FROM_EMAIL ?? "noreply@cube.london";
+  if (!SENDGRID_API_KEY) return;
+
+  // Count total covered for this friday (don't reveal WHO)
+  const { getDb, query: dbQuery } = await import("../db/sqlite.js");
+  const db = await getDb();
+  const result = dbQuery<{ cnt: number }>(db, "SELECT count(*) as cnt FROM rsvps WHERE friday_id = ? AND covered = 1 AND state = 'in'", [fridayId]);
+  const coveredCount = result[0]?.cnt ?? 0;
+
+  const friday = dbQuery<{ date: string }>(db, "SELECT date FROM fridays WHERE id = ?", [fridayId]);
+  const date = friday[0]?.date ?? "upcoming Friday";
+
+  await fetch("https://api.sendgrid.com/v3/mail/send", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${SENDGRID_API_KEY}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      personalizations: [{ to: [{ email: coordinatorEmail }] }],
+      from: { email: FROM_EMAIL, name: "Cubehall" },
+      subject: `${coveredCount} covered RSVP${coveredCount !== 1 ? "s" : ""} for ${date}`,
+      content: [{
+        type: "text/plain",
+        value: `${coveredCount} attendee${coveredCount !== 1 ? "s" : ""} for ${date} need${coveredCount === 1 ? "s" : ""} their entry covered.\n\nThe default is to split the cost evenly among other attendees (£${(7 * coveredCount / Math.max(1, 8 - coveredCount)).toFixed(2)} extra each if 8 attend).\n\nNo names are shown — this is anonymous.`,
+      }],
+    }),
+  });
+}

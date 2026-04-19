@@ -9,10 +9,28 @@ export async function loader({ request, params }: { request: Request; params: { 
     api.me(ch),
   ]);
   if (!fridayResult.ok) throw new Response("Not found", { status: 404 });
+
+  // Get covered count via API (coordinator-only info)
+  const user = meResult.ok ? meResult.data.user : null;
+  let coveredCount = 0;
+  if (user?.role === "coordinator") {
+    const API_BASE = `http://localhost:${process.env.API_PORT ?? "37556"}`;
+    try {
+      const res = await fetch(`${API_BASE}/api/fridays/${params.fridayId}/covered-count`, {
+        headers: cookieHeader(request),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        coveredCount = data.count ?? 0;
+      }
+    } catch {}
+  }
+
   return {
     ...fridayResult.data,
     allCubes: cubesResult.ok ? cubesResult.data.cubes : [],
-    currentUser: meResult.ok ? meResult.data.user : null,
+    currentUser: user,
+    coveredCount,
   };
 }
 
@@ -22,9 +40,10 @@ export async function action({ request, params }: { request: Request; params: { 
   const intent = formData.get("intent") as string;
 
   if (intent === "rsvp-in" || intent === "rsvp-in-covered") {
-    const result = await api.rsvp(params.fridayId, "in", ch);
+    const covered = intent === "rsvp-in-covered";
+    const result = await api.rsvp(params.fridayId, "in", { ...ch, covered });
     if (!result.ok) return { error: result.error.message };
-    const msg = intent === "rsvp-in-covered"
+    const msg = covered
       ? "You're in! The community has you covered."
       : "You're in!";
     return { success: msg };
@@ -73,7 +92,7 @@ export async function action({ request, params }: { request: Request; params: { 
 export default function FridayDetail() {
   const data = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
-  const { friday, enrollments, rsvps, pods, allCubes, currentUser } = data;
+  const { friday, enrollments, rsvps, pods, allCubes, currentUser, coveredCount } = data;
 
   const stateKind = friday.state.kind;
   const canRsvp = ["open", "enrollment_closed", "vote_open", "vote_closed"].includes(stateKind);
@@ -140,6 +159,12 @@ export default function FridayDetail() {
         <h2 className="text-lg font-semibold text-white">
           Attending ({activeRsvps.length})
         </h2>
+
+        {currentUser?.role === "coordinator" && coveredCount > 0 && (
+          <p className="mt-1 text-sm text-amber-400">
+            {coveredCount} attendee{coveredCount !== 1 ? "s" : ""} need{coveredCount === 1 ? "s" : ""} entry covered
+          </p>
+        )}
 
         {activeRsvps.length > 0 && (
           <ul className="mt-2 space-y-1">
@@ -246,10 +271,9 @@ export default function FridayDetail() {
           </div>
         )}
 
-        {canEnroll && myCubes.length === 0 && currentUser?.profile?.hostCapable && (
+        {canEnroll && myCubes.length === 0 && (
           <p className="mt-2 text-sm text-gray-500">
-            All your cubes are already enrolled.{" "}
-            <Link to="/app/cubes/new" className="text-amber-400">Add a new cube</Link>
+            Got a cube? <Link to="/app/cubes/new" className="text-amber-400">Add it</Link> and enroll it here.
           </p>
         )}
       </section>
@@ -257,9 +281,10 @@ export default function FridayDetail() {
       {/* Vote section */}
       {canVote && activeEnrollments.length >= 3 && (
         <section className="rounded-xl border border-blue-800 bg-blue-900/20 p-4">
-          <h2 className="text-lg font-semibold text-white">Vote</h2>
+          <h2 className="text-lg font-semibold text-white">Vote (optional)</h2>
           <p className="mt-1 text-sm text-gray-400">
-            Rank the cubes in order of preference.
+            Have a strong preference? Rank the cubes. Otherwise, the least
+            recently played cubes will be selected automatically.
           </p>
           <Form method="post" className="mt-3 space-y-2">
             <input type="hidden" name="intent" value="vote" />

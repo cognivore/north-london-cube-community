@@ -177,16 +177,26 @@ export const advanceFriday = (fridayId: string) =>
       }
 
       case "vote_open": {
-        // Close vote and run IRV
+        // Close vote — if votes exist, run IRV. Otherwise, pick least recently played.
         const enrollments = yield* enrollmentRepo.findActiveByFriday(fid);
         const votes = yield* voteRepo.findByFriday(fid);
         const cubeIds = enrollments.map(e => e.cubeId);
         const cubes = yield* cubeRepo.findMany(cubeIds);
 
-        const irvResult = runIRV({ votes, enrollments, cubes });
-        const winners = isOk(irvResult)
-          ? irvResult.value.winners
-          : enrollments.slice(0, 2).map(e => e.id) as NonEmptyArray<any>;
+        let winners: NonEmptyArray<any>;
+
+        if (votes.length > 0) {
+          // People voted — use IRV
+          const irvResult = runIRV({ votes, enrollments, cubes });
+          winners = isOk(irvResult)
+            ? irvResult.value.winners
+            : selectByRecency(enrollments, cubes);
+          yield* logger.info("Vote resolved by IRV", { fridayId, voteCount: votes.length });
+        } else {
+          // No votes — select by least recently played
+          winners = selectByRecency(enrollments, cubes);
+          yield* logger.info("No votes — selected by recency", { fridayId });
+        }
 
         event = { kind: "close_vote", winners };
         const result = transition(friday.state, event);
@@ -483,6 +493,28 @@ function makeTemplate(pod: PlannedPod): PairingsTemplate {
     rounds: unsafePositiveInt(rounds),
     strategy,
   };
+}
+
+/**
+ * Select up to 2 winners by least recently played.
+ * Cubes that have never been played sort first (oldest).
+ * Alphabetical tiebreaker on cube name.
+ */
+function selectByRecency(
+  enrollments: ReadonlyArray<Enrollment>,
+  cubes: ReadonlyArray<Cube>,
+): NonEmptyArray<any> {
+  const sorted = [...enrollments].sort((a, b) => {
+    const cubeA = cubes.find(c => c.id === a.cubeId);
+    const cubeB = cubes.find(c => c.id === b.cubeId);
+    // Never played = epoch 0 (sorts first = least recent)
+    const lastA = cubeA?.lastRunAt ? Date.parse(cubeA.lastRunAt) : 0;
+    const lastB = cubeB?.lastRunAt ? Date.parse(cubeB.lastRunAt) : 0;
+    if (lastA !== lastB) return lastA - lastB; // least recent first
+    // Alphabetical tiebreaker
+    return (cubeA?.name ?? "").localeCompare(cubeB?.name ?? "");
+  });
+  return sorted.slice(0, 2).map(e => e.id) as NonEmptyArray<any>;
 }
 
 function assignTeam(seatIndex: number, format: DraftFormat) {
