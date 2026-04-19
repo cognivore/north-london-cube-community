@@ -37,17 +37,17 @@ export default function NewCube() {
 
   return (
     <div className="space-y-4">
-      <h1 className="text-2xl font-bold text-white">Add cube</h1>
+      <h1 className="text-2xl font-bold text-ink">Add cube</h1>
 
       {actionData?.error && (
-        <div className="rounded-lg bg-red-900/50 p-3 text-sm text-red-300">
+        <div className="rounded-sm bg-warn-soft p-3 text-sm text-warn">
           {actionData.error}
         </div>
       )}
 
       <Form method="post" className="space-y-4">
         <div>
-          <label htmlFor="name" className="block text-sm font-medium text-gray-300">
+          <label htmlFor="name" className="block text-sm font-medium text-ink-soft">
             Cube name
           </label>
           <input
@@ -55,13 +55,13 @@ export default function NewCube() {
             name="name"
             type="text"
             required
-            className="mt-1 block w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2.5 text-white placeholder-gray-500 focus:border-amber-500 focus:outline-none"
+            className="mt-1 block w-full rounded-sm border border-rule-heavy bg-paper px-3 py-2.5 text-ink placeholder:text-ink-faint focus:border-dci-teal focus:ring-1 focus:ring-dci-teal focus:outline-none"
             placeholder="My Vintage Cube"
           />
         </div>
 
         <div>
-          <label htmlFor="cubecobraUrl" className="block text-sm font-medium text-gray-300">
+          <label htmlFor="cubecobraUrl" className="block text-sm font-medium text-ink-soft">
             CubeCobra URL
           </label>
           <input
@@ -69,22 +69,22 @@ export default function NewCube() {
             name="cubecobraUrl"
             type="url"
             required
-            className="mt-1 block w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2.5 text-white placeholder-gray-500 focus:border-amber-500 focus:outline-none"
+            className="mt-1 block w-full rounded-sm border border-rule-heavy bg-paper px-3 py-2.5 text-ink placeholder:text-ink-faint focus:border-dci-teal focus:ring-1 focus:ring-dci-teal focus:outline-none"
             placeholder="https://cubecobra.com/cube/overview/mycube"
           />
         </div>
 
         <fieldset>
-          <legend className="text-sm font-medium text-gray-300">Supported formats</legend>
+          <legend className="text-sm font-medium text-ink-soft">Supported formats</legend>
           <div className="mt-2 grid grid-cols-2 gap-2">
             {formats.map((f) => (
-              <label key={f.value} className="flex items-center gap-2 text-sm text-gray-300">
+              <label key={f.value} className="flex items-center gap-2 text-sm text-ink-soft">
                 <input
                   type="checkbox"
                   name="supportedFormats"
                   value={f.value}
                   defaultChecked={f.value === "swiss_draft"}
-                  className="rounded border-gray-600 bg-gray-800 text-amber-500 focus:ring-amber-500"
+                  className="rounded border-rule-heavy bg-paper focus:ring-dci-teal"
                 />
                 {f.label}
               </label>
@@ -95,13 +95,13 @@ export default function NewCube() {
         <div className="grid grid-cols-3 gap-3">
           {(["preferredPodSize", "minPodSize", "maxPodSize"] as const).map((field) => (
             <div key={field}>
-              <label htmlFor={field} className="block text-sm font-medium text-gray-300">
+              <label htmlFor={field} className="block text-sm font-medium text-ink-soft">
                 {field === "preferredPodSize" ? "Preferred" : field === "minPodSize" ? "Min" : "Max"} pod
               </label>
               <select
                 id={field}
                 name={field}
-                className="mt-1 block w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2.5 text-white focus:border-amber-500 focus:outline-none min-h-[44px]"
+                className="mt-1 block w-full rounded-sm border border-rule-heavy bg-paper px-3 py-2.5 text-ink focus:border-dci-teal focus:ring-1 focus:ring-dci-teal focus:outline-none min-h-[44px]"
                 defaultValue={field === "minPodSize" ? "4" : "8"}
               >
                 <option value="4">4</option>
@@ -114,7 +114,7 @@ export default function NewCube() {
 
         <button
           type="submit"
-          className="w-full rounded-lg bg-amber-500 py-2.5 font-semibold text-gray-950 hover:bg-amber-400 min-h-[44px]"
+          className="w-full rounded-sm bg-amber-soft border border-amber py-2.5 font-semibold text-ink hover:bg-amber-soft min-h-[44px]"
         >
           Create cube
         </button>

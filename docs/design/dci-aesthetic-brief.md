@@ -104,15 +104,15 @@ code, .mono, [data-mono] {
 
 Numeric columns in any table render right-aligned, mono, with `font-variant-numeric: tabular-nums slashed-zero`. Player IDs render in grouped five-digit clusters (`38472 91062`), echoing the DCI-card format.
 
-## 4. The seven mandated moves
+## 4. The mandated moves
 
-These apply to every authenticated screen as built, and govern the eventual refactor of the landing page (layout preserved, classes replaced).
+These apply to every screen as built, and govern the eventual refactor of the landing page (layout preserved, classes replaced). §4.1–§4.7 are concrete moves; §4.8 codifies the spatial register system that governs all of them and is non-negotiable.
 
 **4.1** The framework card (`Where / When / Doors / P1P1`) drops `rounded-xl bg-gray-800`. Replacement: zero-radius box, 1px `--color-rule-heavy` border, `--color-paper-alt` fill, labels in small-caps micro-type (`--color-ink-faint`), values in mono with tabular-nums (`--color-ink`). Rows separated by a single-pixel `--color-rule` divider. Each row carries a 16×16 Silk glyph on the left (see §5).
 
 **4.2** The numbered steps drop filled amber circles. Replacement: bracketed mono markers `[01]`, `[02]`, `[03]` in `--color-amber`. Body text in `--color-ink-soft`.
 
-**4.3** Buttons drop `rounded-lg`. Replacement: `rounded-sm` (or `rounded-none` for tool-strip buttons), 1px border in the relevant functional accent, flat fill, visible keyboard-shortcut hint (`Sign in ⏎`, `Register`). `accesskey` attributes mandated where a keyboard shortcut is exposed.
+**4.3** Buttons drop `rounded-lg`. Replacement: `rounded-sm` (or `rounded-none` for dense-register tool-strip buttons), 1px border in the relevant functional accent, flat fill, visible keyboard-shortcut hint (`Sign in ⏎`, `Register`). `accesskey` attributes mandated where a keyboard shortcut is exposed. Padding, size, and typographic treatment follow the register rules in §4.8 — a primary CTA in the generous register is emphatically *not* the same button as a tool-strip action in the dense register.
 
 **4.4** Links are visibly underlined in body text, rendered in `--color-dci-teal`. No hover-only underline. Keith's resilience rule.
 
@@ -121,6 +121,22 @@ These apply to every authenticated screen as built, and govern the eventual refa
 **4.6** A persistent status bar is mandated on every authenticated screen: 28px tall, fixed to the viewport bottom, `--color-paper-alt` fill, 1px top border in `--color-rule-heavy`, content in mono at 12px. Shape: venue · date · round · player count · clock · connectivity dot. The dot is the Silk `bullet_green.png` / `bullet_yellow.png` / `bullet_red.png` per §5. The status bar is not applied to the landing page.
 
 **4.7** Motion is minimised. No bouncing, no spring easings, no entrance animations. Permitted: 120ms linear colour transitions on hover, and the browser's native `view-transition` for route changes. `@media (prefers-reduced-motion: reduce)` disables the latter.
+
+**4.8** *Spatial register and geometric discipline.* Cubehall has two legitimate visual registers, and no single page mixes them. Both registers sit on the same palette (§2), the same typography (§3), and the same Silk iconography (§5); only spacing, rhythm, and button sizing differ.
+
+*Dense register — the sovereign-app surfaces.* Applies to the pairings table, the standings screen, the pod listing during a live round, the scorekeeper grid, the audit log view, and the mandated 28px status bar (§4.6). Descends from Tufte's data-ink ratio and Cooper's sovereign-application doctrine. Characteristic tokens: 8px base grid, tight leading (1.35), hairline `--color-rule` dividers, compact iconography at 16×16 native Silk, table cells at `py-1 px-2`, row gap `gap-1`. Function demands density; any generosity applied here reads as contempt for the scorekeeper.
+
+*Generous register — the transient-app surfaces.* Applies to the landing page, the RSVP flow, the profile screen (the surface in the screenshot that prompted this section), the login and register screens, the colophon, and every public/marketing surface. Descends from the Bauhaus-to-Swiss-grid lineage: Jan Tschichold's *Die Neue Typographie* (1928), Josef Müller-Brockmann's *Grid Systems in Graphic Design* (1981), Armin Hofmann's *Graphic Design Manual* (1965), Massimo Vignelli's *The Vignelli Canon* (2010), and Dieter Rams's ten principles (Braun, HfG Ulm). Whitespace is structure, not absence. Characteristic tokens: 32px vertical rhythm, line-height 1.6 on body, dramatic type-size contrast (h1 roughly 5× body), section gaps at minimum `py-16` / `py-24`, form field rows at `py-6` with label and input stacked not inline, primary CTAs at `px-8 py-4` minimum with label in Inter semibold plus a mono shortcut hint (`↵`) at the end. On mobile portrait the same rhythm collapses proportionally — never below `py-8` between sections.
+
+*Geometric discipline.* Bauhaus teaches pure primitives: the square, the circle, the triangle. The project extends the teaching to corner radius with three permitted values and nothing in between.
+
+- `rounded-none` — the square. Default for every rectangular panel, card, table, form input, textarea, section divider, and fixture strip. This is the base case.
+- `rounded-sm` — a single 2px concession to screen rendering. Permitted on buttons, toggles, and inputs in the generous register where a `rounded-none` button reads as unintentionally sharp. Forbidden on full-width panels.
+- `rounded-full` — the circle. Permitted and encouraged on specifically circular elements: status dots (the `bullet_*` Silk glyphs are already circular at 16×16), single-letter avatar chips, solo badges where the pill shape is itself the message.
+
+`rounded-md`, `rounded-lg`, `rounded-xl`, `rounded-2xl`, `rounded-3xl`, and any arbitrary-value radius above 2px are forbidden across the entire codebase. The pillow is not a Bauhaus form; it belongs to a SaaS lineage Cubehall does not quote.
+
+*Why two registers.* Tournament software that wants to be trusted under pressure must be dense on the grids that carry data, and airy on the surfaces that welcome people in. The failure mode demonstrated by the `/app/profile` screenshot is the application of one register (neither fully dense nor fully generous) to both kinds of surface. The correct reading of the brief is that dense and generous are the two tunings of a single instrument, and every screen must be tuned to one or the other before it ships.
 
 ## 5. Icon mandate — famfamfam Silk
 
@@ -268,6 +284,8 @@ Silk icons at 16×16 are readable on all tested device classes; 32×32 `image-re
 
 ## 8. One-page summary
 
-Light-only, warm cream paper (`#FBF9F3`), near-black ink, two functional accents (amber for action, teal for information), dropped from the dark scheme entirely. Inter for body, JetBrains Mono for all numeric and ID content, `tabular-nums slashed-zero` globally. Framework panel becomes a hairline-bordered dialog; step markers become bracketed mono numerals; buttons lose pillow radius and gain shortcut hints; form inputs get visible borders; a persistent status bar is added to every authenticated screen. Silk icons (Mark James, CC BY 2.5) are mandated as the sole raster icon vocabulary, installed via `packages/web/scripts/fetch-icons.sh` to `packages/web/public/icons/silk/`, rendered at 16×16 native through a single `<Icon />` component, and attributed in the footer, `/colophon`, and `docs/design/icon-attribution.md`. Favicon is generated from `dice.png`.
+Light-only, warm cream paper (`#FBF9F3`), near-black ink, two functional accents (amber for action, teal for information), dropped from the dark scheme entirely. Inter for body, JetBrains Mono for all numeric and ID content, `tabular-nums slashed-zero` globally. Framework panel becomes a hairline-bordered dialog; step markers become bracketed mono numerals; buttons lose pillow radius and gain shortcut hints; form inputs get visible borders; a persistent status bar is added to every authenticated screen. Silk icons (Mark James, CC BY 2.5) are mandated as the sole raster icon vocabulary, installed via `packages/web/scripts/fetch-icons.sh` to `packages/web/public/icons/silk/`, rendered at 16×16 native through a single `<Icon />` component, and attributed in the footer, `/colophon`, and `docs/design/icon-attribution.md`. Favicon is generated from the cube/draft concept icon per §5.3.
+
+Two spatial registers (§4.8), never mixed. Dense register (Tufte / Cooper / WER) on pairings, standings, scorekeeper, status bar — 8px grid, hairline dividers, tight leading. Generous register (Tschichold / Müller-Brockmann / Vignelli / Rams) on landing, RSVP, profile, login, colophon — 32px vertical rhythm, generous line-height, dramatic type-size contrast, primary CTAs at `px-8 py-4` minimum with mono shortcut hints. Three permitted corner radii and nothing else: `rounded-none` for rectangles, `rounded-full` for circles, `rounded-sm` as a single 2px screen-rendering concession on buttons and inputs in the generous register. Everything larger is forbidden.
 
 Nothing animates. Nothing bounces. Nothing hides. Landing-page layout is preserved verbatim.

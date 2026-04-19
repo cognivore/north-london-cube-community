@@ -11,26 +11,26 @@ export default function FridaysList() {
 
   return (
     <div className="space-y-4">
-      <h1 className="text-2xl font-bold text-white">Fridays</h1>
+      <h1 className="text-2xl font-bold text-ink">Fridays</h1>
 
       {fridays.length === 0 ? (
-        <p className="text-gray-400">No Fridays scheduled yet.</p>
+        <p className="text-ink-faint">No Fridays scheduled yet.</p>
       ) : (
         <div className="space-y-3">
           {fridays.map((f: any) => (
             <Link
               key={f.id}
               to={`/app/fridays/${f.id}`}
-              className="block rounded-xl border border-gray-800 bg-gray-900 p-4 hover:border-gray-700 transition-colors"
+              className="block rounded-sm border border-rule bg-paper-alt p-4 hover:border-rule-heavy transition-colors"
             >
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="font-semibold text-white">{f.date}</p>
-                  <p className="text-sm text-gray-400">
+                  <p className="font-semibold text-ink">{f.date}</p>
+                  <p className="text-sm text-ink-faint">
                     {f.state.kind.replace(/_/g, " ")}
                   </p>
                 </div>
-                <span className="text-gray-500">→</span>
+                <span className="text-ink-faint">&rarr;</span>
               </div>
             </Link>
           ))}

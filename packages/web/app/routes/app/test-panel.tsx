@@ -107,34 +107,34 @@ export default function TestPanel() {
 
   return (
     <div className="space-y-6">
-      <div className="rounded-xl border-2 border-yellow-500/50 bg-yellow-900/20 p-4">
-        <h1 className="text-xl font-bold text-yellow-400">TEST MODE</h1>
-        <p className="text-sm text-yellow-300/70">
+      <div className="rounded-sm border-2 border-amber bg-amber-soft p-4">
+        <h1 className="text-xl font-bold text-amber">TEST MODE</h1>
+        <p className="text-sm text-ink-soft">
           Staging environment. You are {currentUser?.displayName ?? "unknown"} ({currentUser?.role}).
         </p>
       </div>
 
       {actionData?.error && (
-        <div className="rounded-lg bg-red-900/50 p-3 text-sm text-red-300">{actionData.error}</div>
+        <div className="rounded-sm bg-warn-soft p-3 text-sm text-warn">{actionData.error}</div>
       )}
       {actionData?.success && (
-        <div className="rounded-lg bg-green-900/50 p-3 text-sm text-green-300">{actionData.success}</div>
+        <div className="rounded-sm border border-ok bg-paper-alt p-3 text-sm text-ok">{actionData.success}</div>
       )}
 
       {/* Create phony users */}
-      <section className="rounded-xl border border-gray-800 bg-gray-900 p-4">
-        <h2 className="text-lg font-semibold text-white">Create phony users</h2>
+      <section className="rounded-sm border border-rule bg-paper-alt p-4">
+        <h2 className="text-lg font-semibold text-ink">Create phony users</h2>
         <Form method="post" className="mt-3 flex flex-wrap gap-2 items-end">
           <input type="hidden" name="intent" value="create-phony" />
           <div>
-            <label className="block text-xs text-gray-400">Count</label>
+            <label className="block text-xs text-ink-faint">Count</label>
             <input name="count" type="number" defaultValue="4" min="1" max="16"
-              className="w-16 rounded border border-gray-700 bg-gray-800 px-2 py-2 text-sm text-white min-h-[44px]" />
+              className="w-16 rounded-sm border border-rule-heavy bg-paper px-2 py-2 text-sm text-ink min-h-[44px]" />
           </div>
           <div className="flex-1">
-            <label className="block text-xs text-gray-400">RSVP to Friday</label>
+            <label className="block text-xs text-ink-faint">RSVP to Friday</label>
             <select name="fridayId"
-              className="w-full rounded border border-gray-700 bg-gray-800 px-2 py-2 text-sm text-white min-h-[44px]">
+              className="w-full rounded-sm border border-rule-heavy bg-paper px-2 py-2 text-sm text-ink min-h-[44px]">
               <option value="">None</option>
               {fridays.slice(0, 8).map((f: any) => (
                 <option key={f.id} value={f.id}>{f.date} ({f.state.kind})</option>
@@ -142,25 +142,25 @@ export default function TestPanel() {
             </select>
           </div>
           <button type="submit"
-            className="rounded-lg bg-yellow-600 px-4 py-2 text-sm font-medium text-white hover:bg-yellow-500 min-h-[44px]">
+            className="rounded-sm bg-amber-soft border border-amber px-4 py-2 text-sm font-medium text-ink hover:bg-amber-soft min-h-[44px]">
             Create
           </button>
         </Form>
       </section>
 
       {/* Advance Friday */}
-      <section className="rounded-xl border border-gray-800 bg-gray-900 p-4">
-        <h2 className="text-lg font-semibold text-white">Advance Friday</h2>
+      <section className="rounded-sm border border-rule bg-paper-alt p-4">
+        <h2 className="text-lg font-semibold text-ink">Advance Friday</h2>
         <div className="mt-3 space-y-2">
           {fridays.slice(0, 5).map((f: any) => (
             <Form method="post" key={f.id} className="flex items-center justify-between gap-2">
               <input type="hidden" name="intent" value="advance" />
               <input type="hidden" name="fridayId" value={f.id} />
-              <span className="text-sm text-gray-300">{f.date}</span>
-              <span className="text-xs text-gray-500">{f.state.kind}</span>
+              <span className="text-sm text-ink-soft">{f.date}</span>
+              <span className="text-xs text-ink-faint">{f.state.kind}</span>
               <button type="submit"
-                className="rounded bg-gray-700 px-3 py-1 text-xs text-white hover:bg-gray-600 min-h-[44px]">
-                Advance →
+                className="rounded-sm bg-paper border border-rule-heavy px-3 py-1 text-xs text-ink hover:bg-paper-alt min-h-[44px]">
+                Advance &rarr;
               </button>
             </Form>
           ))}
@@ -168,23 +168,23 @@ export default function TestPanel() {
       </section>
 
       {/* User directory — sign in as anyone */}
-      <section className="rounded-xl border border-gray-800 bg-gray-900 p-4">
-        <h2 className="text-lg font-semibold text-white">User directory ({users.length})</h2>
-        <p className="text-xs text-gray-500 mt-1">Click to sign in as that user</p>
+      <section className="rounded-sm border border-rule bg-paper-alt p-4">
+        <h2 className="text-lg font-semibold text-ink">User directory ({users.length})</h2>
+        <p className="text-xs text-ink-faint mt-1">Click to sign in as that user</p>
         <div className="mt-3 space-y-1 max-h-96 overflow-y-auto">
           {users.map((u: any) => (
-            <Form method="post" key={u.id} className="flex items-center justify-between rounded-lg bg-gray-800 px-3 py-2 hover:bg-gray-700">
+            <Form method="post" key={u.id} className="flex items-center justify-between rounded-sm bg-paper-sunken px-3 py-2 hover:bg-paper-alt">
               <input type="hidden" name="intent" value="sign-in-as" />
               <input type="hidden" name="userId" value={u.id} />
               <div>
-                <span className="text-sm font-medium text-white">{u.display_name}</span>
-                <span className="ml-2 text-xs text-gray-500">{u.email}</span>
+                <span className="text-sm font-medium text-ink">{u.display_name}</span>
+                <span className="ml-2 text-xs text-ink-faint">{u.email}</span>
                 {u.role === "coordinator" && (
-                  <span className="ml-2 text-xs text-amber-400">coordinator</span>
+                  <span className="ml-2 text-xs text-amber">coordinator</span>
                 )}
               </div>
               <button type="submit"
-                className="rounded bg-amber-500/20 px-2 py-1 text-xs text-amber-400 hover:bg-amber-500/30 min-h-[44px]">
+                className="rounded-sm bg-amber-soft px-2 py-1 text-xs text-amber hover:bg-amber-soft min-h-[44px]">
                 Sign in as
               </button>
             </Form>

@@ -33,28 +33,28 @@ export default function FridayOverride() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold text-white">
+      <h1 className="text-2xl font-bold text-ink">
         Admin: {friday.date}
       </h1>
-      <p className="text-sm text-gray-400">
-        Current state: <span className="text-amber-400">{friday.state.kind}</span>
+      <p className="text-sm text-ink-faint">
+        Current state: <span className="text-amber">{friday.state.kind}</span>
       </p>
 
       {actionData?.error && (
-        <div className="rounded-lg bg-red-900/50 p-3 text-sm text-red-300">
+        <div className="rounded-sm bg-warn-soft p-3 text-sm text-warn">
           {actionData.error}
         </div>
       )}
       {actionData?.success && (
-        <div className="rounded-lg bg-green-900/50 p-3 text-sm text-green-300">
+        <div className="rounded-sm border border-ok bg-paper-alt p-3 text-sm text-ok">
           {actionData.success}
         </div>
       )}
 
-      <Form method="post" className="space-y-4 rounded-xl border border-red-900 bg-gray-900 p-4">
-        <h2 className="text-lg font-semibold text-red-400">Force cancel</h2>
+      <Form method="post" className="space-y-4 rounded-sm border border-warn bg-paper-alt p-4">
+        <h2 className="text-lg font-semibold text-warn">Force cancel</h2>
         <div>
-          <label htmlFor="reason" className="block text-sm font-medium text-gray-300">
+          <label htmlFor="reason" className="block text-sm font-medium text-ink-soft">
             Reason
           </label>
           <input
@@ -62,13 +62,13 @@ export default function FridayOverride() {
             name="reason"
             type="text"
             required
-            className="mt-1 block w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2.5 text-white"
+            className="mt-1 block w-full rounded-sm border border-rule-heavy bg-paper px-3 py-2.5 text-ink focus:border-dci-teal focus:ring-1 focus:ring-dci-teal focus:outline-none"
             placeholder="Admin cancellation reason"
           />
         </div>
         <button
           type="submit"
-          className="rounded-lg bg-red-600 px-4 py-2.5 font-semibold text-white hover:bg-red-500 min-h-[44px]"
+          className="rounded-sm bg-warn-soft border border-warn px-4 py-2.5 font-semibold text-warn hover:bg-warn-soft min-h-[44px]"
         >
           Force cancel Friday
         </button>

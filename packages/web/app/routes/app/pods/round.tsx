@@ -47,38 +47,38 @@ export default function RoundView() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold text-white">Round {roundNumber}</h1>
+      <h1 className="text-2xl font-bold text-ink">Round {roundNumber}</h1>
 
       {/* Timer */}
       <TimerDisplay podId={data.pod.id} />
 
       {actionData?.error && (
-        <div className="rounded-lg bg-red-900/50 p-3 text-sm text-red-300">
+        <div className="rounded-sm bg-warn-soft p-3 text-sm text-warn">
           {actionData.error}
         </div>
       )}
       {actionData?.success && (
-        <div className="rounded-lg bg-green-900/50 p-3 text-sm text-green-300">
+        <div className="rounded-sm border border-ok bg-paper-alt p-3 text-sm text-ok">
           {actionData.success}
         </div>
       )}
 
       {/* Pairings */}
       <section className="space-y-3">
-        <h2 className="text-lg font-semibold text-white">Matches</h2>
+        <h2 className="text-lg font-semibold text-ink">Matches</h2>
         {pairings.map((m: any) => (
           <div
             key={m.id}
-            className="rounded-xl border border-gray-800 bg-gray-900 p-4"
+            className="rounded-sm border border-rule bg-paper-alt p-4"
           >
             <div className="flex items-center justify-between">
               <div className="text-sm">
-                <span className="font-medium text-white">{m.player1Id}</span>
-                <span className="mx-2 text-gray-500">vs</span>
-                <span className="font-medium text-white">{m.player2Id}</span>
+                <span className="font-medium text-ink">{m.player1Id}</span>
+                <span className="mx-2 text-ink-faint">vs</span>
+                <span className="font-medium text-ink">{m.player2Id}</span>
               </div>
               {m.result.kind === "reported" && (
-                <span className="text-sm font-mono text-amber-400">
+                <span className="text-sm font-mono text-amber">
                   {m.result.p1Wins}-{m.result.p2Wins}
                   {m.result.draws > 0 ? `-${m.result.draws}` : ""}
                 </span>
@@ -94,7 +94,7 @@ export default function RoundView() {
                 <ScoreInput label="D" name="draws" defaultValue="0" />
                 <button
                   type="submit"
-                  className="rounded-lg bg-amber-500 px-3 py-2 text-sm font-medium text-gray-950 hover:bg-amber-400 min-h-[44px]"
+                  className="rounded-sm bg-amber-soft border border-amber px-3 py-2 text-sm font-medium text-ink hover:bg-amber-soft min-h-[44px]"
                 >
                   Report
                 </button>
@@ -110,14 +110,14 @@ export default function RoundView() {
 function ScoreInput({ label, name, defaultValue = "0" }: { label: string; name: string; defaultValue?: string }) {
   return (
     <div className="w-14">
-      <label className="block text-xs text-gray-400">{label}</label>
+      <label className="block text-xs text-ink-faint">{label}</label>
       <input
         name={name}
         type="number"
         min="0"
         max="3"
         defaultValue={defaultValue}
-        className="w-full rounded border border-gray-700 bg-gray-800 px-2 py-2 text-center text-sm text-white min-h-[44px]"
+        className="w-full rounded-sm border border-rule-heavy bg-paper px-2 py-2 text-center text-sm text-ink min-h-[44px]"
       />
     </div>
   );
@@ -138,7 +138,7 @@ function TimerDisplay({ podId }: { podId: string }) {
 
   if (timer.kind === "not_started") {
     return (
-      <div className="rounded-xl bg-gray-800 p-4 text-center text-gray-400">
+      <div className="rounded-sm bg-paper-alt p-4 text-center text-ink-faint">
         Timer not started
       </div>
     );
@@ -151,11 +151,11 @@ function TimerDisplay({ podId }: { podId: string }) {
     const secs = remaining % 60;
 
     return (
-      <div className="rounded-xl bg-gray-800 p-4 text-center">
-        <p className="text-3xl font-mono font-bold text-white">
+      <div className="rounded-sm bg-paper-alt p-4 text-center">
+        <p className="text-3xl font-mono font-bold text-ink">
           {mins.toString().padStart(2, "0")}:{secs.toString().padStart(2, "0")}
         </p>
-        <p className="mt-1 text-sm text-gray-400">Round in progress</p>
+        <p className="mt-1 text-sm text-ink-faint">Round in progress</p>
       </div>
     );
   }
@@ -166,19 +166,19 @@ function TimerDisplay({ podId }: { podId: string }) {
     const secs = remaining % 60;
 
     return (
-      <div className="rounded-xl bg-yellow-900/30 p-4 text-center">
-        <p className="text-3xl font-mono font-bold text-yellow-400">
+      <div className="rounded-sm bg-amber-soft p-4 text-center">
+        <p className="text-3xl font-mono font-bold text-amber">
           {mins.toString().padStart(2, "0")}:{secs.toString().padStart(2, "0")}
         </p>
-        <p className="mt-1 text-sm text-yellow-300">Paused</p>
+        <p className="mt-1 text-sm text-amber">Paused</p>
       </div>
     );
   }
 
   if (timer.kind === "additional_turns") {
     return (
-      <div className="rounded-xl bg-red-900/30 p-4 text-center">
-        <p className="text-xl font-bold text-red-400">
+      <div className="rounded-sm bg-warn-soft p-4 text-center">
+        <p className="text-xl font-bold text-warn">
           Time! {timer.turnsRemaining} additional turns
         </p>
       </div>
@@ -186,7 +186,7 @@ function TimerDisplay({ podId }: { podId: string }) {
   }
 
   return (
-    <div className="rounded-xl bg-gray-800 p-4 text-center text-gray-400">
+    <div className="rounded-sm bg-paper-alt p-4 text-center text-ink-faint">
       Round complete
     </div>
   );

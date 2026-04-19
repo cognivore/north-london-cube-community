@@ -1,4 +1,5 @@
 import { Link, Outlet, useLoaderData, redirect } from "react-router";
+import { Icon } from "../../components/Icon";
 import { api, cookieHeader } from "../../lib/api";
 
 export async function loader({ request }: { request: Request }) {
@@ -53,24 +54,24 @@ export default function AppLayout() {
   return (
     <div className="min-h-screen">
       {/* Nav */}
-      <nav className="border-b border-gray-800 bg-gray-900">
+      <nav className="border-b border-rule bg-paper">
         <div className="mx-auto flex max-w-3xl items-center justify-between px-4 py-3">
-          <Link to="/app" className="text-lg font-bold text-amber-400">
+          <Link to="/app" className="text-lg font-bold text-amber">
             Cubehall
           </Link>
           <div className="flex items-center gap-4 text-sm">
-            <Link to="/app/fridays" className="text-gray-300 hover:text-white">
+            <Link to="/app/fridays" className="text-ink-soft underline hover:text-ink">
               Fridays
             </Link>
-            <Link to="/app/cubes" className="text-gray-300 hover:text-white">
+            <Link to="/app/cubes" className="text-ink-soft underline hover:text-ink">
               Cubes
             </Link>
             {testMode && (
-              <Link to="/app/test" className="text-yellow-400 hover:text-yellow-300">
+              <Link to="/app/test" className="text-amber underline hover:text-amber">
                 Test
               </Link>
             )}
-            <Link to="/app/profile" className="text-gray-300 hover:text-white">
+            <Link to="/app/profile" className="text-ink-soft underline hover:text-ink">
               {user.displayName}
             </Link>
           </div>
@@ -78,24 +79,25 @@ export default function AppLayout() {
       </nav>
 
       {/* Venue + next Friday banner — visible on every page */}
-      <div className="border-b border-gray-800 bg-gray-900/50">
+      <div className="border-b border-rule bg-paper-alt">
         <div className="mx-auto max-w-3xl px-4 py-3">
           <div className="flex items-center justify-between gap-4">
             <div className="text-sm">
-              <p className="font-medium text-white">
+              <p className="font-medium text-ink">
                 Hitchhiker & Owl
               </p>
-              <p className="text-xs text-gray-400">
+              <p className="text-xs text-ink-faint">
                 Palmers Green, N13 &middot; Doors 18:30 &middot; P1P1 18:45 &middot; £7 entry (venue credit)
               </p>
             </div>
             {nextFriday && (
               <Link
                 to={`/app/fridays/${nextFriday.id}`}
-                className="flex items-center gap-2 rounded-lg bg-gray-800 px-3 py-1.5 text-sm hover:bg-gray-700"
+                className="flex items-center gap-2 rounded-sm border border-rule-heavy bg-paper px-3 py-1.5 text-sm hover:bg-paper-alt"
               >
-                <span className="text-gray-300">{nextDate}</span>
-                <span className="rounded-full bg-amber-500/20 px-2 py-0.5 text-xs font-bold text-amber-400">
+                <Icon name="calendar" size={16} alt="Date" />
+                <span className="text-ink-soft">{nextDate}</span>
+                <span className="bg-amber-soft px-2 py-0.5 text-xs font-bold text-amber">
                   {rsvpCount} in
                 </span>
               </Link>

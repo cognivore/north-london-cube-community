@@ -12,19 +12,19 @@ export default function AppHome() {
 
   return (
     <div className="space-y-8">
-      <h1 className="text-2xl font-bold text-white">This Friday</h1>
+      <h1 className="text-2xl font-bold text-ink">This Friday</h1>
 
       {nextFriday ? (
         <FridayCard friday={nextFriday} />
       ) : (
-        <div className="rounded-xl border border-gray-800 bg-gray-900 p-8 text-center">
-          <p className="text-gray-400">No upcoming Fridays scheduled.</p>
+        <div className="rounded-sm border border-rule bg-paper-alt p-8 text-center">
+          <p className="text-ink-faint">No upcoming Fridays scheduled.</p>
         </div>
       )}
 
       {fridays.length > 1 && (
         <div className="space-y-4">
-          <h2 className="text-lg font-semibold text-gray-300">Upcoming</h2>
+          <h2 className="text-lg font-semibold text-ink-soft">Upcoming</h2>
           {fridays.slice(1).map((f: any) => (
             <FridayCard key={f.id} friday={f} compact />
           ))}
@@ -45,20 +45,20 @@ function FridayCard({ friday, compact }: { friday: any; compact?: boolean }) {
   return (
     <Link
       to={`/app/fridays/${friday.id}`}
-      className={`block rounded-xl border border-gray-800 bg-gray-900 hover:border-gray-700 transition-colors ${
+      className={`block rounded-sm border border-rule bg-paper-alt hover:border-rule-heavy transition-colors ${
         compact ? "p-4" : "p-6"
       }`}
     >
       <div className="flex items-center justify-between">
         <div>
-          <p className={`font-semibold text-white ${compact ? "text-base" : "text-xl"}`}>
+          <p className={`font-semibold text-ink ${compact ? "text-base" : "text-xl"}`}>
             {formatted}
           </p>
-          <p className="mt-0.5 text-sm text-gray-400">
+          <p className="mt-0.5 text-sm text-ink-faint">
             State: <StateChip state={friday.state.kind} />
           </p>
         </div>
-        <span className="text-gray-500">→</span>
+        <span className="text-ink-faint">&rarr;</span>
       </div>
     </Link>
   );
@@ -66,20 +66,20 @@ function FridayCard({ friday, compact }: { friday: any; compact?: boolean }) {
 
 function StateChip({ state }: { state: string }) {
   const colors: Record<string, string> = {
-    scheduled: "text-gray-400",
-    open: "text-green-400",
-    enrollment_closed: "text-yellow-400",
-    vote_open: "text-blue-400",
-    vote_closed: "text-blue-300",
-    locked: "text-purple-400",
-    confirmed: "text-purple-300",
-    in_progress: "text-amber-400",
-    complete: "text-gray-400",
-    cancelled: "text-red-400",
+    scheduled: "text-ink-faint",
+    open: "text-ok",
+    enrollment_closed: "text-amber",
+    vote_open: "text-dci-teal",
+    vote_closed: "text-dci-teal",
+    locked: "text-dci-teal",
+    confirmed: "text-dci-teal",
+    in_progress: "text-amber",
+    complete: "text-ink-faint",
+    cancelled: "text-warn",
   };
 
   return (
-    <span className={`font-medium ${colors[state] ?? "text-gray-400"}`}>
+    <span className={`font-medium ${colors[state] ?? "text-ink-faint"}`}>
       {state.replace(/_/g, " ")}
     </span>
   );

@@ -15,12 +15,12 @@ export default function CubeDetail() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-white">{cube.name}</h1>
+        <h1 className="text-2xl font-bold text-ink">{cube.name}</h1>
         <a
           href={cube.cubecobraUrl}
           target="_blank"
           rel="noopener noreferrer"
-          className="text-sm text-amber-400 hover:text-amber-300"
+          className="text-sm text-dci-teal underline hover:text-dci-teal"
         >
           View on CubeCobra
         </a>
@@ -34,12 +34,12 @@ export default function CubeDetail() {
       </div>
 
       <div>
-        <h3 className="text-sm font-medium text-gray-400">Formats</h3>
+        <h3 className="text-sm font-medium text-ink-faint">Formats</h3>
         <div className="mt-1 flex flex-wrap gap-2">
           {cube.supportedFormats.map((f: string) => (
             <span
               key={f}
-              className="rounded-full bg-gray-800 px-3 py-1 text-xs font-medium text-gray-300"
+              className="rounded-full bg-paper-alt px-3 py-1 text-xs font-medium text-ink-soft"
             >
               {f.replace(/_/g, " ")}
             </span>
@@ -48,7 +48,7 @@ export default function CubeDetail() {
       </div>
 
       {cube.retired && (
-        <p className="text-sm text-red-400">This cube is retired.</p>
+        <p className="text-sm text-warn">This cube is retired.</p>
       )}
     </div>
   );
@@ -56,9 +56,9 @@ export default function CubeDetail() {
 
 function InfoItem({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-lg bg-gray-900 p-3">
-      <p className="text-xs text-gray-400">{label}</p>
-      <p className="text-lg font-semibold text-white">{value}</p>
+    <div className="rounded-sm bg-paper-alt p-3">
+      <p className="text-xs text-ink-faint">{label}</p>
+      <p className="text-lg font-semibold text-ink">{value}</p>
     </div>
   );
 }

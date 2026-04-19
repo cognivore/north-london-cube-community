@@ -26,7 +26,7 @@ export async function action({ request }: { request: Request }) {
   const fallback = formData.getAll("fallbackFormats") as string[];
   data.fallbackFormats = fallback;
 
-  const result = await api.updateProfile(data);
+  const result = await api.updateProfile(data, { headers: cookieHeader(request) });
   if (!result.ok) return { error: result.error.message };
   return { success: "Profile updated!" };
 }
@@ -42,22 +42,22 @@ export default function Profile() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold text-white">Profile</h1>
+      <h1 className="text-2xl font-bold text-ink">Profile</h1>
 
       {actionData?.error && (
-        <div className="rounded-lg bg-red-900/50 p-3 text-sm text-red-300">
+        <div className="rounded-sm bg-warn-soft p-3 text-sm text-warn">
           {actionData.error}
         </div>
       )}
       {actionData?.success && (
-        <div className="rounded-lg bg-green-900/50 p-3 text-sm text-green-300">
+        <div className="rounded-sm border border-ok bg-paper-alt p-3 text-sm text-ok">
           {actionData.success}
         </div>
       )}
 
       <Form method="post" className="space-y-4">
         <div>
-          <label htmlFor="displayName" className="block text-sm font-medium text-gray-300">
+          <label htmlFor="displayName" className="block text-sm font-medium text-ink-soft">
             Display name
           </label>
           <input
@@ -65,12 +65,12 @@ export default function Profile() {
             name="displayName"
             type="text"
             defaultValue={user.displayName}
-            className="mt-1 block w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2.5 text-white focus:border-amber-500 focus:outline-none"
+            className="mt-1 block w-full rounded-sm border border-rule-heavy bg-paper px-3 py-2.5 text-ink focus:border-dci-teal focus:ring-1 focus:ring-dci-teal focus:outline-none"
           />
         </div>
 
         <div>
-          <label htmlFor="bio" className="block text-sm font-medium text-gray-300">
+          <label htmlFor="bio" className="block text-sm font-medium text-ink-soft">
             Bio
           </label>
           <textarea
@@ -78,31 +78,31 @@ export default function Profile() {
             name="bio"
             rows={3}
             defaultValue={user.profile.bio}
-            className="mt-1 block w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2.5 text-white focus:border-amber-500 focus:outline-none"
+            className="mt-1 block w-full rounded-sm border border-rule-heavy bg-paper px-3 py-2.5 text-ink focus:border-dci-teal focus:ring-1 focus:ring-dci-teal focus:outline-none"
           />
         </div>
 
-        <label className="flex items-center gap-2 text-sm text-gray-300">
+        <label className="flex items-center gap-2 text-sm text-ink-soft">
           <input
             type="checkbox"
             name="hostCapable"
             defaultChecked={user.profile.hostCapable}
-            className="rounded border-gray-600 bg-gray-800 text-amber-500"
+            className="rounded border-rule-heavy bg-paper"
           />
           I can host (bring a cube)
         </label>
 
         <fieldset>
-          <legend className="text-sm font-medium text-gray-300">Preferred formats</legend>
+          <legend className="text-sm font-medium text-ink-soft">Preferred formats</legend>
           <div className="mt-2 grid grid-cols-2 gap-2">
             {formats.map((f) => (
-              <label key={f} className="flex items-center gap-2 text-sm text-gray-300">
+              <label key={f} className="flex items-center gap-2 text-sm text-ink-soft">
                 <input
                   type="checkbox"
                   name="preferredFormats"
                   value={f}
                   defaultChecked={user.profile.preferredFormats.includes(f)}
-                  className="rounded border-gray-600 bg-gray-800 text-amber-500"
+                  className="rounded border-rule-heavy bg-paper"
                 />
                 {f.replace(/_/g, " ")}
               </label>
@@ -112,14 +112,14 @@ export default function Profile() {
 
         <button
           type="submit"
-          className="w-full rounded-lg bg-amber-500 py-2.5 font-semibold text-gray-950 hover:bg-amber-400 min-h-[44px]"
+          className="w-full rounded-sm bg-amber-soft border border-amber py-2.5 font-semibold text-ink hover:bg-amber-soft min-h-[44px]"
         >
           Save profile
         </button>
       </Form>
 
-      <div className="border-t border-gray-800 pt-4">
-        <p className="text-xs text-gray-500">
+      <div className="border-t border-rule pt-4">
+        <p className="text-xs text-ink-faint">
           Email: {user.email} | Role: {user.role} | No-shows: {user.profile.noShowCount}
         </p>
       </div>

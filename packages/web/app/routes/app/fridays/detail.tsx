@@ -122,7 +122,7 @@ export default function FridayDetail() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-white">{formatted}</h1>
+          <h1 className="text-2xl font-bold text-ink">{formatted}</h1>
           <p className="mt-1 text-sm">
             <StateChip state={stateKind} />
           </p>
@@ -134,9 +134,9 @@ export default function FridayDetail() {
             <input type="hidden" name="intent" value="advance" />
             <button
               type="submit"
-              className="rounded-lg border border-gray-700 px-3 py-1.5 text-xs text-gray-400 hover:border-gray-500 hover:text-white"
+              className="rounded-sm border border-rule-heavy px-3 py-1.5 text-xs text-ink-faint hover:border-rule-heavy hover:text-ink"
             >
-              Advance →
+              Advance &rarr;
             </button>
           </Form>
         )}
@@ -144,24 +144,24 @@ export default function FridayDetail() {
 
       {/* Feedback */}
       {actionData?.error && (
-        <div className="rounded-lg bg-red-900/50 p-3 text-sm text-red-300">
+        <div className="rounded-sm bg-warn-soft p-3 text-sm text-warn">
           {actionData.error}
         </div>
       )}
       {actionData?.success && (
-        <div className="rounded-lg bg-green-900/50 p-3 text-sm text-green-300">
+        <div className="rounded-sm border border-ok bg-paper-alt p-3 text-sm text-ok">
           {actionData.success}
         </div>
       )}
 
       {/* RSVP */}
-      <section className="rounded-xl border border-gray-800 bg-gray-900 p-4">
-        <h2 className="text-lg font-semibold text-white">
+      <section className="rounded-sm border border-rule bg-paper-alt p-4">
+        <h2 className="text-lg font-semibold text-ink">
           Attending ({activeRsvps.length})
         </h2>
 
         {currentUser?.role === "coordinator" && coveredCount > 0 && (
-          <p className="mt-1 text-sm text-amber-400">
+          <p className="mt-1 text-sm text-amber">
             {coveredCount} attendee{coveredCount !== 1 ? "s" : ""} need{coveredCount === 1 ? "s" : ""} entry covered
           </p>
         )}
@@ -169,9 +169,9 @@ export default function FridayDetail() {
         {activeRsvps.length > 0 && (
           <ul className="mt-2 space-y-1">
             {activeRsvps.map((r: any) => (
-              <li key={r.id} className="text-sm text-gray-300">
+              <li key={r.id} className="text-sm text-ink-soft">
                 {r.userId === currentUser?.id ? (
-                  <span className="text-amber-400">You</span>
+                  <span className="text-amber">You</span>
                 ) : (
                   r.userId.slice(0, 8)
                 )}
@@ -188,16 +188,16 @@ export default function FridayDetail() {
                   <input type="hidden" name="intent" value="rsvp-in" />
                   <button
                     type="submit"
-                    className="rounded-lg bg-green-600 px-6 py-3 text-base font-bold text-white hover:bg-green-500 min-h-[44px]"
+                    className="rounded-sm border border-ok bg-paper px-6 py-3 text-base font-bold text-ok hover:bg-paper-alt min-h-[44px]"
                   >
-                    I'm in! (£7)
+                    I'm in! (&pound;7)
                   </button>
                 </Form>
                 <Form method="post">
                   <input type="hidden" name="intent" value="rsvp-in-covered" />
                   <button
                     type="submit"
-                    className="rounded-lg border border-green-700 px-4 py-3 text-sm font-medium text-green-300 hover:bg-green-900/30 min-h-[44px]"
+                    className="rounded-sm border border-ok bg-paper px-4 py-3 text-sm font-medium text-ok hover:bg-paper-alt min-h-[44px]"
                   >
                     I'm in (can't afford)
                   </button>
@@ -208,7 +208,7 @@ export default function FridayDetail() {
                 <input type="hidden" name="intent" value="rsvp-out" />
                 <button
                   type="submit"
-                  className="rounded-lg bg-gray-700 px-4 py-3 text-sm font-medium text-gray-200 hover:bg-gray-600 min-h-[44px]"
+                  className="rounded-sm bg-paper border border-rule-heavy px-4 py-3 text-sm font-medium text-ink-soft hover:bg-paper-alt min-h-[44px]"
                 >
                   Cancel RSVP
                 </button>
@@ -219,8 +219,8 @@ export default function FridayDetail() {
       </section>
 
       {/* Cube enrollment */}
-      <section className="rounded-xl border border-gray-800 bg-gray-900 p-4">
-        <h2 className="text-lg font-semibold text-white">
+      <section className="rounded-sm border border-rule bg-paper-alt p-4">
+        <h2 className="text-lg font-semibold text-ink">
           Cubes ({activeEnrollments.length})
         </h2>
 
@@ -230,10 +230,10 @@ export default function FridayDetail() {
               const cube = allCubes.find((c: any) => c.id === e.cubeId);
               const isMyEnrollment = e.hostId === currentUser?.id;
               return (
-                <div key={e.id} className="flex items-center justify-between rounded-lg bg-gray-800 px-3 py-2">
+                <div key={e.id} className="flex items-center justify-between rounded-sm bg-paper-sunken px-3 py-2">
                   <div>
-                    <p className="font-medium text-white">{cube?.name ?? "Unknown cube"}</p>
-                    <p className="text-xs text-gray-400">
+                    <p className="font-medium text-ink">{cube?.name ?? "Unknown cube"}</p>
+                    <p className="text-xs text-ink-faint">
                       {cube?.supportedFormats?.join(", ")} | {cube?.cardCount} cards
                     </p>
                   </div>
@@ -241,7 +241,7 @@ export default function FridayDetail() {
                     <Form method="post">
                       <input type="hidden" name="intent" value="withdraw" />
                       <input type="hidden" name="enrollmentId" value={e.id} />
-                      <button type="submit" className="text-xs text-red-400 hover:text-red-300">
+                      <button type="submit" className="text-xs text-warn hover:text-warn">
                         Withdraw
                       </button>
                     </Form>
@@ -254,17 +254,17 @@ export default function FridayDetail() {
 
         {canEnroll && myCubes.length > 0 && (
           <div className="mt-3 space-y-2">
-            <p className="text-sm text-gray-400">Bring a cube:</p>
+            <p className="text-sm text-ink-faint">Bring a cube:</p>
             {myCubes.map((cube: any) => (
               <Form method="post" key={cube.id}>
                 <input type="hidden" name="intent" value="enroll" />
                 <input type="hidden" name="cubeId" value={cube.id} />
                 <button
                   type="submit"
-                  className="w-full rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-left hover:bg-amber-500/20 min-h-[44px]"
+                  className="w-full rounded-sm border border-amber bg-amber-soft px-4 py-3 text-left hover:bg-amber-soft min-h-[44px]"
                 >
-                  <p className="font-medium text-amber-400">{cube.name}</p>
-                  <p className="text-xs text-gray-400">{cube.supportedFormats?.join(", ")}</p>
+                  <p className="font-medium text-amber">{cube.name}</p>
+                  <p className="text-xs text-ink-faint">{cube.supportedFormats?.join(", ")}</p>
                 </button>
               </Form>
             ))}
@@ -272,17 +272,17 @@ export default function FridayDetail() {
         )}
 
         {canEnroll && myCubes.length === 0 && (
-          <p className="mt-2 text-sm text-gray-500">
-            Got a cube? <Link to="/app/cubes/new" className="text-amber-400">Add it</Link> and enroll it here.
+          <p className="mt-2 text-sm text-ink-faint">
+            Got a cube? <Link to="/app/cubes/new" className="text-dci-teal underline">Add it</Link> and enroll it here.
           </p>
         )}
       </section>
 
       {/* Vote section */}
       {canVote && activeEnrollments.length >= 3 && (
-        <section className="rounded-xl border border-blue-800 bg-blue-900/20 p-4">
-          <h2 className="text-lg font-semibold text-white">Vote (optional)</h2>
-          <p className="mt-1 text-sm text-gray-400">
+        <section className="rounded-sm border border-dci-teal bg-dci-teal-soft p-4">
+          <h2 className="text-lg font-semibold text-ink">Vote (optional)</h2>
+          <p className="mt-1 text-sm text-ink-faint">
             Have a strong preference? Rank the cubes. Otherwise, the least
             recently played cubes will be selected automatically.
           </p>
@@ -291,15 +291,15 @@ export default function FridayDetail() {
             {activeEnrollments.map((e: any) => {
               const cube = allCubes.find((c: any) => c.id === e.cubeId);
               return (
-                <label key={e.id} className="flex items-center gap-3 rounded-lg bg-gray-800 px-3 py-2">
+                <label key={e.id} className="flex items-center gap-3 rounded-sm bg-paper px-3 py-2">
                   <input type="checkbox" name="ranking" value={e.id} className="rounded" />
-                  <span className="text-white">{cube?.name ?? e.cubeId.slice(0, 8)}</span>
+                  <span className="text-ink">{cube?.name ?? e.cubeId.slice(0, 8)}</span>
                 </label>
               );
             })}
             <button
               type="submit"
-              className="w-full rounded-lg bg-blue-600 py-2.5 font-semibold text-white hover:bg-blue-500 min-h-[44px]"
+              className="w-full rounded-sm border border-dci-teal bg-paper py-2.5 font-semibold text-dci-teal hover:bg-paper-alt min-h-[44px]"
             >
               Submit vote
             </button>
@@ -310,15 +310,15 @@ export default function FridayDetail() {
       {/* Pods */}
       {pods.length > 0 && (
         <section className="space-y-3">
-          <h2 className="text-lg font-semibold text-white">Pods</h2>
+          <h2 className="text-lg font-semibold text-ink">Pods</h2>
           {pods.map((p: any) => (
             <Link
               key={p.id}
               to={`/app/pods/${p.id}`}
-              className="block rounded-xl border border-gray-800 bg-gray-900 p-4 hover:border-amber-500/30"
+              className="block rounded-sm border border-rule bg-paper-alt p-4 hover:border-amber"
             >
               <div className="flex justify-between">
-                <span className="font-medium text-white">
+                <span className="font-medium text-ink">
                   {p.format.replace(/_/g, " ")}
                 </span>
                 <StateChip state={p.state} />
@@ -333,24 +333,24 @@ export default function FridayDetail() {
 
 function StateChip({ state }: { state: string }) {
   const colors: Record<string, string> = {
-    scheduled: "text-gray-400 bg-gray-800",
-    open: "text-green-400 bg-green-900/30",
-    enrollment_closed: "text-yellow-400 bg-yellow-900/30",
-    vote_open: "text-blue-400 bg-blue-900/30",
-    vote_closed: "text-blue-300 bg-blue-900/20",
-    locked: "text-purple-400 bg-purple-900/30",
-    confirmed: "text-purple-300 bg-purple-900/20",
-    in_progress: "text-amber-400 bg-amber-900/30",
-    complete: "text-gray-400 bg-gray-800",
-    cancelled: "text-red-400 bg-red-900/30",
-    drafting: "text-blue-400 bg-blue-900/30",
-    building: "text-yellow-400 bg-yellow-900/30",
-    playing: "text-amber-400 bg-amber-900/30",
-    pending: "text-gray-400 bg-gray-800",
+    scheduled: "text-ink-faint bg-paper-alt",
+    open: "text-ok bg-paper-alt",
+    enrollment_closed: "text-amber bg-amber-soft",
+    vote_open: "text-dci-teal bg-dci-teal-soft",
+    vote_closed: "text-dci-teal bg-dci-teal-soft",
+    locked: "text-dci-teal bg-dci-teal-soft",
+    confirmed: "text-dci-teal bg-dci-teal-soft",
+    in_progress: "text-amber bg-amber-soft",
+    complete: "text-ink-faint bg-paper-alt",
+    cancelled: "text-warn bg-warn-soft",
+    drafting: "text-dci-teal bg-dci-teal-soft",
+    building: "text-amber bg-amber-soft",
+    playing: "text-amber bg-amber-soft",
+    pending: "text-ink-faint bg-paper-alt",
   };
 
   return (
-    <span className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-medium ${colors[state] ?? "text-gray-400 bg-gray-800"}`}>
+    <span className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-medium ${colors[state] ?? "text-ink-faint bg-paper-alt"}`}>
       {state.replace(/_/g, " ")}
     </span>
   );
