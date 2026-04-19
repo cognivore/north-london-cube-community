@@ -82,7 +82,27 @@ fridays.get("/:id", async (c) => {
         const rsvps = yield* rsvpRepo.findByFriday(friday.id);
         const pods = yield* podRepo.findByFriday(friday.id);
 
-        return { friday, enrollments, rsvps, pods };
+        // Build a player directory: userId → { displayName, dciNumber }
+        const { getDb: gdb, query: dbq } = await import("../../db/sqlite.js");
+        const db = await gdb();
+        const allUserIds = new Set([
+          ...rsvps.map((r: any) => r.userId),
+          ...enrollments.map((e: any) => e.hostId),
+        ]);
+        const players: Record<string, { displayName: string; dciNumber: number | null }> = {};
+        for (const uid of allUserIds) {
+          const rows = dbq<{ display_name: string; dci_number: number | null }>(
+            db, "SELECT display_name, dci_number FROM users WHERE id = ?", [uid],
+          );
+          if (rows[0]) {
+            players[uid as string] = {
+              displayName: rows[0].display_name,
+              dciNumber: rows[0].dci_number,
+            };
+          }
+        }
+
+        return { friday, enrollments, rsvps, pods, players };
       }),
     );
 

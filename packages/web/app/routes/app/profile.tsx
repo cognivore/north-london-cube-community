@@ -120,11 +120,11 @@ export default function Profile() {
 
       {/* DCI card */}
       {user.dciNumber != null && (
-        <div className="border border-rule-heavy bg-paper-alt p-4 flex items-center gap-3">
-          <img src="/icons/dci-32.png" width={32} height={32} alt="DCI" style={{ imageRendering: "auto" }} />
+        <div className="border border-rule-heavy bg-paper-alt p-5 flex items-center gap-4">
+          <img src="/icons/dci-128.png" width={128} height={128} alt="DCI" />
           <div>
             <p className="text-xs text-ink-faint uppercase tracking-wider" style={{ fontVariant: "small-caps" }}>Duelist Cuber Identifier</p>
-            <p className="mono text-xl font-bold text-ink" data-mono>
+            <p className="mono text-3xl font-bold text-ink" data-mono>
               {String(user.dciNumber).padStart(5, "0")}
             </p>
           </div>
