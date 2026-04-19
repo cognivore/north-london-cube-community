@@ -103,6 +103,7 @@ export default function AppHome() {
         <Form method="post" className="rounded-sm border border-rule bg-paper-alt p-4">
           <input type="hidden" name="intent" value="create-friday" />
           <h2 className="text-sm font-semibold text-ink-soft">Add a Friday</h2>
+          <input type="hidden" name="venueId" value={venues[0]?.id ?? ""} />
           <div className="mt-2 flex gap-2 items-end">
             <div className="flex-1">
               <label className="block text-xs text-ink-faint">Date</label>
@@ -110,17 +111,6 @@ export default function AppHome() {
                 name="date" type="date" defaultValue={getNextFridayDate()}
                 className="w-full rounded-sm border border-rule-heavy bg-paper px-3 py-2 text-sm text-ink min-h-[44px]"
               />
-            </div>
-            <div className="flex-1">
-              <label className="block text-xs text-ink-faint">Venue</label>
-              <select
-                name="venueId"
-                className="w-full rounded-sm border border-rule-heavy bg-paper px-3 py-2 text-sm text-ink min-h-[44px]"
-              >
-                {venues.map((v: any) => (
-                  <option key={v.id} value={v.id}>{v.name}</option>
-                ))}
-              </select>
             </div>
             <button type="submit"
               className="rounded-sm bg-amber-soft border border-amber px-4 py-2 text-sm font-medium text-ink min-h-[44px]">
