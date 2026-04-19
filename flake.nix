@@ -22,6 +22,7 @@
           buildInputs = with pkgs; [
             nodejs_22
             pnpm
+            imagemagick
           ] ++ pkgs.lib.optionals isDarwin [
             darwin.cctools
           ];

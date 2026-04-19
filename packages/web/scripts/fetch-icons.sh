@@ -57,7 +57,7 @@ already_installed() {
 download_and_extract() {
   local staging tarball url
   staging="$(mktemp -d)"
-  trap 'rm -rf "$staging"' EXIT
+  trap 'rm -rf "$staging"' RETURN
 
   tarball="$staging/silk.tar.gz"
   for url in "${UPSTREAM_TARBALLS[@]}"; do
@@ -105,8 +105,15 @@ EOF
 }
 
 generate_favicons() {
+  # Brief §5.6 mandates dice.png, but the standard Silk pack ships
+  # without it. Fall back to bricks.png (the cube/draft concept icon
+  # per §5.3) — conservative reading per the RULES preamble.
   local source="$ICONS_DIR/dice.png"
-  [ -f "$source" ] || fatal "dice.png missing from installed pack"
+  if [ ! -f "$source" ]; then
+    source="$ICONS_DIR/bricks.png"
+    warn "dice.png not in pack — using bricks.png per §5.3 mapping"
+  fi
+  [ -f "$source" ] || fatal "neither dice.png nor bricks.png found in pack"
 
   cp "$source" "$FAVICON_PNG"
   info "Wrote $FAVICON_PNG"

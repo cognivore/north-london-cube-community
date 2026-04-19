@@ -1,1 +1,55 @@
 @import "tailwindcss";
+@import "@fontsource/inter/latin.css";
+@import "@fontsource/jetbrains-mono/latin.css";
+
+/* §2 — Mandated light palette tokens */
+@theme {
+  /* Surface */
+  --color-paper:        #FBF9F3;
+  --color-paper-alt:    #F5F2E8;
+  --color-paper-sunken: #EFEBDC;
+
+  /* Ink */
+  --color-ink:          #11181C;
+  --color-ink-soft:     #3E4953;
+  --color-ink-faint:    #6B7480;
+
+  /* Rules */
+  --color-rule:         #E6DFC9;
+  --color-rule-heavy:   #BFB8A3;
+  --color-rule-focus:   #11181C;
+
+  /* Action accent — amber */
+  --color-amber:        #B45309;
+  --color-amber-soft:   #FED7AA;
+
+  /* Informational accent — DCI teal */
+  --color-dci-teal:     #0B6B83;
+  --color-dci-teal-soft:#CDE4EB;
+
+  /* Warning / destructive */
+  --color-warn:         #9F1239;
+  --color-warn-soft:    #FECDD3;
+
+  /* Status */
+  --color-ok:           #166534;
+  --color-pending:      #854D0E;
+}
+
+/* §3 — Typography base rules */
+@layer base {
+  html {
+    color-scheme: light;
+    background: var(--color-paper);
+    color: var(--color-ink);
+    font-family: Inter, system-ui, sans-serif;
+    font-feature-settings: "ss01" 1, "cv11" 1;
+    font-variant-numeric: tabular-nums slashed-zero;
+    line-height: 1.55;
+    accent-color: var(--color-amber);
+  }
+
+  code, .mono, [data-mono] {
+    font-family: "JetBrains Mono", ui-monospace, monospace;
+  }
+}

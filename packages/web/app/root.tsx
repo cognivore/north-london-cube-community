@@ -27,7 +27,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <Meta />
         <Links />
       </head>
-      <body className="min-h-screen antialiased">
+      <body className="min-h-dvh bg-paper text-ink antialiased">
         {children}
         <ScrollRestoration />
         <Scripts />
@@ -52,10 +52,10 @@ export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center p-4">
+    <div className="flex min-h-dvh items-center justify-center bg-paper p-4">
       <div className="text-center">
-        <h1 className="text-2xl font-bold text-red-400">{heading}</h1>
-        <p className="mt-2 text-gray-400">{message}</p>
+        <h1 className="text-2xl font-bold text-warn">{heading}</h1>
+        <p className="mt-2 text-ink-soft">{message}</p>
       </div>
     </div>
   );
