@@ -278,8 +278,8 @@ export const lockConfirmedRsvps = (fridayId: string) =>
       if (rsvp.state === "confirmed") {
         // Check if 30 minutes have passed since confirmation
         const confirmedAt = new Date(rsvp.lastTransitionAt).getTime();
-        const thirtyMin = 30 * 60 * 1000;
-        if (Date.now() - confirmedAt >= thirtyMin) {
+        const lockDelay = process.env.TEST_MODE === "true" ? 60 * 1000 : 30 * 60 * 1000;
+        if (Date.now() - confirmedAt >= lockDelay) {
           yield* rsvpRepo.updateState(rsvp.id, "locked" as RsvpState, now);
           locked++;
         }
@@ -301,6 +301,7 @@ function sendConfirmationEmail(userId: string, fridayId: string) {
     try: async () => {
       const SENDGRID_API_KEY = process.env.SENDGRID_API_KEY ?? "";
       const FROM_EMAIL = process.env.FROM_EMAIL ?? "noreply@cube.london";
+      const APP_URL = process.env.APP_URL ?? "https://north.cube.london";
       if (!SENDGRID_API_KEY) return;
 
       const { getDb, query } = await import("../db/sqlite.js");
@@ -309,7 +310,14 @@ function sendConfirmationEmail(userId: string, fridayId: string) {
         "SELECT email, display_name FROM users WHERE id = ?", [userId]);
       const friday = query<{ date: string }>(db,
         "SELECT date FROM fridays WHERE id = ?", [fridayId]);
+      const rsvp = query<{ created_at: string }>(db,
+        "SELECT created_at FROM rsvps WHERE friday_id = ? AND user_id = ?", [fridayId, userId]);
       if (!user[0] || !friday[0]) return;
+
+      const rsvpTime = rsvp[0]?.created_at
+        ? new Date(rsvp[0].created_at).toLocaleString("en-GB", { timeZone: "Europe/London", dateStyle: "medium", timeStyle: "short" })
+        : "just now";
+      const testPrefix = process.env.TEST_MODE === "true" ? "[TEST] " : "";
 
       await fetch("https://api.sendgrid.com/v3/mail/send", {
         method: "POST",
@@ -320,10 +328,10 @@ function sendConfirmationEmail(userId: string, fridayId: string) {
         body: JSON.stringify({
           personalizations: [{ to: [{ email: process.env.TEST_MODE === "true" ? "jm@memorici.de" : user[0].email }] }],
           from: { email: FROM_EMAIL, name: "North London Cube Community" },
-          subject: `${process.env.TEST_MODE === "true" ? "[TEST] " : ""}You're confirmed for ${friday[0].date}`,
+          subject: `${testPrefix}You're confirmed for ${friday[0].date}`,
           content: [{
             type: "text/plain",
-            value: `Hi ${user[0].display_name},\n\nYou're confirmed for Friday ${friday[0].date} at Hitchhiker & Owl.\n\nDoors 18:30, P1P1 18:45. Your RSVP will lock in 30 minutes.\n\nIf you can't make it, withdraw now at https://north.cube.london\n\n— Cubehall`,
+            value: `Hi ${user[0].display_name},\n\nYou're confirmed for Friday ${friday[0].date} at Hitchhiker & Owl.\n\nRSVP'd at: ${rsvpTime}\nDoors: 18:30\nP1P1: 18:45\n\nYou are locked in — this is a commitment to attend. See you there!\n\n${APP_URL}\n\n— Cubehall`,
           }],
         }),
       });
