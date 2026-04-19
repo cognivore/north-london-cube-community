@@ -101,6 +101,20 @@ export async function action({ request }: { request: Request }) {
   return null;
 }
 
+function advanceLabel(state: string): string {
+  switch (state) {
+    case "scheduled": return "Open RSVPs";
+    case "open": return "Close enrollment →";
+    case "enrollment_closed": return "Evaluate cubes →";
+    case "vote_open": return "Close vote →";
+    case "vote_closed": return "Lock pods →";
+    case "locked": return "Confirm →";
+    case "confirmed": return "Start event →";
+    case "in_progress": return "Complete →";
+    default: return "Advance →";
+  }
+}
+
 export default function TestPanel() {
   const { users, fridays, currentUser } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
@@ -151,19 +165,31 @@ export default function TestPanel() {
       {/* Advance Friday */}
       <section className="rounded-sm border border-rule bg-paper-alt p-4">
         <h2 className="text-lg font-semibold text-ink">Advance Friday</h2>
+        <p className="text-xs text-ink-faint mt-1">Simulates the weekly cron. Make sure cubes are enrolled before closing enrollment!</p>
         <div className="mt-3 space-y-2">
-          {fridays.slice(0, 5).map((f: any) => (
-            <Form method="post" key={f.id} className="flex items-center justify-between gap-2">
-              <input type="hidden" name="intent" value="advance" />
-              <input type="hidden" name="fridayId" value={f.id} />
-              <span className="text-sm text-ink-soft">{f.date}</span>
-              <span className="text-xs text-ink-faint">{f.state.kind}</span>
-              <button type="submit"
-                className="rounded-sm bg-paper border border-rule-heavy px-3 py-1 text-xs text-ink hover:bg-paper-alt min-h-[44px]">
-                Advance &rarr;
-              </button>
-            </Form>
-          ))}
+          {fridays.slice(0, 5).map((f: any) => {
+            const state = f.state.kind;
+            const terminal = state === "cancelled" || state === "complete";
+            const label = advanceLabel(state);
+            return (
+              <div key={f.id} className="flex items-center justify-between gap-2">
+                <span className="text-sm text-ink-soft">{f.date}</span>
+                <span className={`text-xs ${terminal ? "text-warn" : "text-ink-faint"}`}>{state === "scheduled" ? "planned" : state.replace(/_/g, " ")}</span>
+                {!terminal ? (
+                  <Form method="post">
+                    <input type="hidden" name="intent" value="advance" />
+                    <input type="hidden" name="fridayId" value={f.id} />
+                    <button type="submit"
+                      className="rounded-sm bg-paper border border-dci-teal px-3 py-1 text-xs text-dci-teal hover:bg-paper-alt min-h-[44px]">
+                      {label}
+                    </button>
+                  </Form>
+                ) : (
+                  <span className="text-xs text-ink-faint">—</span>
+                )}
+              </div>
+            );
+          })}
         </div>
       </section>
 
