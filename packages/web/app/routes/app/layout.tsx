@@ -78,31 +78,24 @@ export default function AppLayout() {
         </div>
       </nav>
 
-      {/* Venue + next Friday banner — visible on every page */}
+      {/* Venue + next Friday strip */}
       <div className="border-b border-rule bg-paper-alt">
-        <div className="mx-auto max-w-3xl px-4 py-3">
-          <div className="flex items-center justify-between gap-4">
-            <div className="text-sm">
-              <p className="font-medium text-ink">
-                Hitchhiker & Owl
-              </p>
-              <p className="text-xs text-ink-faint">
-                Palmers Green, N13 &middot; Doors 18:30 &middot; P1P1 18:45 &middot; £7 entry (venue credit)
-              </p>
-            </div>
-            {nextFriday && (
-              <Link
-                to={`/app/fridays/${nextFriday.id}`}
-                className="flex items-center gap-2 rounded-sm border border-rule-heavy bg-paper px-3 py-1.5 text-sm hover:bg-paper-alt"
-              >
-                <Icon name="calendar" size={16} alt="Date" />
-                <span className="text-ink-soft">{nextDate}</span>
-                <span className="bg-amber-soft px-2 py-0.5 text-xs font-bold text-amber">
-                  {rsvpCount} in
-                </span>
-              </Link>
-            )}
-          </div>
+        <div className="mx-auto max-w-3xl px-4 py-2 flex items-center justify-between gap-3 text-xs text-ink-faint">
+          <span>
+            Hitchhiker & Owl &middot; Doors <span className="mono" data-mono>18:30</span> &middot; P1P1 <span className="mono" data-mono>18:45</span> &middot; <span className="mono" data-mono>£7</span>
+          </span>
+          {nextFriday && (
+            <Link
+              to={`/app/fridays/${nextFriday.id}`}
+              className="shrink-0 flex items-center gap-1.5 text-ink-soft hover:text-ink"
+            >
+              <Icon name="calendar" size={16} alt="Date" />
+              <span className="mono" data-mono>{nextDate}</span>
+              <span className="bg-amber-soft px-1.5 py-0.5 text-xs font-bold text-amber mono" data-mono>
+                {rsvpCount}
+              </span>
+            </Link>
+          )}
         </div>
       </div>
 
