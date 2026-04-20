@@ -40,7 +40,7 @@ export default function Landing() {
       <section className="border-t border-rule bg-paper py-16 px-4">
         <div className="mx-auto max-w-2xl space-y-10">
           <div>
-            <h2 className="text-2xl font-semibold text-ink">No laws, no masters</h2>
+            <h2 className="text-2xl font-semibold text-ink">No gods, no masters</h2>
             <p className="mt-2 text-ink-soft">
               This is a decentralised, self-organised micro-community.
               There is no committee, no membership fee, no gatekeeping.
@@ -72,7 +72,7 @@ export default function Landing() {
             <h2 className="text-2xl font-semibold text-ink">How it works</h2>
             <div className="mt-3 space-y-4">
               <Step n="01" text="RSVP so people know you're coming. Doesn't matter if there's a cube yet." />
-              <Step n="02" text="Got a cube? Enroll it. Multiple cubes offered? Everyone votes." />
+              <Step n="02" text="Got a cube? Enroll it. Too many? Least recent plays — vote if you feel strongly." />
               <Step n="03" text="Friday evening: show up, draft, play 3 rounds. The app handles pairings, timer, and standings." />
             </div>
           </div>
