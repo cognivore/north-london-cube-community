@@ -20,11 +20,15 @@ export async function loader({ request, params }: { request: Request; params: { 
   const players = pairingsResult.ok ? (pairingsResult.data as any).players ?? {} : {};
   const points = pairingsResult.ok ? (pairingsResult.data as any).points ?? {} : {};
 
+  const meResult = await api.me(ch);
+  const currentUserId = meResult.ok ? meResult.data.user.id : null;
+
   return {
     ...podResult.data,
     pairings: roundMatches,
     players,
     points,
+    currentUserId,
     currentRound: round,
     roundNumber: rn,
   };
@@ -37,15 +41,9 @@ export async function action({ request, params }: { request: Request; params: { 
 
   if (intent === "report") {
     const matchId = formData.get("matchId") as string;
-    const resultValue = formData.get("result") as string;
-
-    // Parse radio value: "2-0", "2-1", "1-2", "0-2", "1-1-1"
-    let p1Wins = 0, p2Wins = 0, draws = 0;
-    if (resultValue === "2-0") { p1Wins = 2; p2Wins = 0; }
-    else if (resultValue === "2-1") { p1Wins = 2; p2Wins = 1; }
-    else if (resultValue === "1-2") { p1Wins = 1; p2Wins = 2; }
-    else if (resultValue === "0-2") { p1Wins = 0; p2Wins = 2; }
-    else if (resultValue === "1-1-1") { p1Wins = 1; p2Wins = 1; draws = 1; }
+    const p1Wins = parseInt(formData.get("p1wins") as string ?? "0", 10);
+    const p2Wins = parseInt(formData.get("p2wins") as string ?? "0", 10);
+    const draws = formData.get("draw") ? 1 : 0;
 
     const result = await api.reportMatch(matchId, { p1Wins, p2Wins, draws }, { headers: ch });
     if (!result.ok) return { error: result.error.message };
@@ -88,9 +86,10 @@ export default function RoundView() {
           const p2Name = p2?.displayName ?? m.player2Id.slice(0, 8);
           const p1Pts = (data as any).points?.[m.player1Id];
           const p2Pts = (data as any).points?.[m.player2Id];
+          const isMyMatch = m.player1Id === (data as any).currentUserId || m.player2Id === (data as any).currentUserId;
 
           return (
-            <div key={m.id} className="rounded-sm border border-rule bg-paper-alt p-4">
+            <div key={m.id} className={`rounded-sm border p-4 ${isMyMatch && m.result.kind === "pending" ? "border-amber bg-amber-soft" : "border-rule bg-paper-alt"}`}>
               {m.result.kind === "reported" ? (
                 /* Reported result */
                 <div className="flex items-center justify-between">
@@ -106,56 +105,75 @@ export default function RoundView() {
                     {m.result.draws > 0 ? `–${m.result.draws}` : ""}
                   </span>
                 </div>
-              ) : (
-                /* Pending — radio-style result entry */
+              ) : isMyMatch ? (
+                /* My pending match — game wins tally */
                 <Form method="post">
                   <input type="hidden" name="intent" value="report" />
                   <input type="hidden" name="matchId" value={m.id} />
 
-                  <div className="space-y-3">
-                    {/* Common results as radio buttons */}
-                    <fieldset className="space-y-2">
-                      <legend className="text-xs text-ink-faint uppercase tracking-wider" style={{ fontVariant: "small-caps" }}>
-                        Result
-                      </legend>
+                  <div className="grid grid-cols-3 gap-2 text-center">
+                    {/* P1 column */}
+                    <div>
+                      <p className="font-medium text-ink text-sm">{p1Name}</p>
+                      {p1Pts != null && <p className="mono text-xs text-ink-faint" data-mono>{p1Pts} pts</p>}
+                      <div className="mt-2 flex justify-center gap-2">
+                        <label className="flex flex-col items-center cursor-pointer">
+                          <input type="radio" name="p1wins" value="1" className="accent-amber" />
+                          <span className="mono text-xs text-ink-faint" data-mono>1</span>
+                        </label>
+                        <label className="flex flex-col items-center cursor-pointer">
+                          <input type="radio" name="p1wins" value="2" defaultChecked className="accent-amber" />
+                          <span className="mono text-xs text-ink-faint" data-mono>2</span>
+                        </label>
+                      </div>
+                    </div>
 
-                      <label className="flex items-center gap-3 rounded-sm bg-paper-sunken px-3 py-2.5 min-h-[44px] cursor-pointer">
-                        <input type="radio" name="result" value="2-0" defaultChecked className="accent-amber" />
-                        <span className="font-medium text-ink">{p1Name}</span>
-                        <span className="mono text-ink-faint ml-auto" data-mono>2–0</span>
-                      </label>
+                    {/* Draw column */}
+                    <div>
+                      <p className="font-medium text-ink-faint text-sm">Draw?</p>
+                      <p className="text-xs text-ink-faint">&nbsp;</p>
+                      <div className="mt-2 flex justify-center">
+                        <label className="flex flex-col items-center cursor-pointer">
+                          <input type="checkbox" name="draw" value="1" className="accent-amber" />
+                          <span className="mono text-xs text-ink-faint" data-mono>1</span>
+                        </label>
+                      </div>
+                    </div>
 
-                      <label className="flex items-center gap-3 rounded-sm bg-paper-sunken px-3 py-2.5 min-h-[44px] cursor-pointer">
-                        <input type="radio" name="result" value="2-1" className="accent-amber" />
-                        <span className="font-medium text-ink">{p1Name}</span>
-                        <span className="mono text-ink-faint ml-auto" data-mono>2–1</span>
-                      </label>
-
-                      <label className="flex items-center gap-3 rounded-sm bg-paper-sunken px-3 py-2.5 min-h-[44px] cursor-pointer">
-                        <input type="radio" name="result" value="1-2" className="accent-amber" />
-                        <span className="font-medium text-ink">{p2Name}</span>
-                        <span className="mono text-ink-faint ml-auto" data-mono>1–2</span>
-                      </label>
-
-                      <label className="flex items-center gap-3 rounded-sm bg-paper-sunken px-3 py-2.5 min-h-[44px] cursor-pointer">
-                        <input type="radio" name="result" value="0-2" className="accent-amber" />
-                        <span className="font-medium text-ink">{p2Name}</span>
-                        <span className="mono text-ink-faint ml-auto" data-mono>0–2</span>
-                      </label>
-
-                      <label className="flex items-center gap-3 rounded-sm bg-paper-sunken px-3 py-2.5 min-h-[44px] cursor-pointer">
-                        <input type="radio" name="result" value="1-1-1" className="accent-amber" />
-                        <span className="text-ink-faint">Draw</span>
-                        <span className="mono text-ink-faint ml-auto" data-mono>1–1–1</span>
-                      </label>
-                    </fieldset>
-
-                    <button type="submit"
-                      className="w-full rounded-sm bg-amber-soft border border-amber py-2.5 font-semibold text-ink min-h-[44px]">
-                      Report result
-                    </button>
+                    {/* P2 column */}
+                    <div>
+                      <p className="font-medium text-ink text-sm">{p2Name}</p>
+                      {p2Pts != null && <p className="mono text-xs text-ink-faint" data-mono>{p2Pts} pts</p>}
+                      <div className="mt-2 flex justify-center gap-2">
+                        <label className="flex flex-col items-center cursor-pointer">
+                          <input type="radio" name="p2wins" value="1" className="accent-amber" />
+                          <span className="mono text-xs text-ink-faint" data-mono>1</span>
+                        </label>
+                        <label className="flex flex-col items-center cursor-pointer">
+                          <input type="radio" name="p2wins" value="2" className="accent-amber" />
+                          <span className="mono text-xs text-ink-faint" data-mono>2</span>
+                        </label>
+                      </div>
+                    </div>
                   </div>
+
+                  <button type="submit"
+                    className="mt-3 w-full rounded-sm bg-amber-soft border border-amber py-2.5 font-semibold text-ink min-h-[44px]">
+                    Report result
+                  </button>
                 </Form>
+              ) : (
+                /* Someone else's pending match — just show names */
+                <div className="flex items-center justify-between text-sm">
+                  <div>
+                    <span className="font-medium text-ink">{p1Name}</span>
+                    {p1Pts != null && <span className="mono text-xs text-ink-faint ml-1" data-mono>({p1Pts})</span>}
+                    <span className="mx-2 text-ink-faint">vs</span>
+                    <span className="font-medium text-ink">{p2Name}</span>
+                    {p2Pts != null && <span className="mono text-xs text-ink-faint ml-1" data-mono>({p2Pts})</span>}
+                  </div>
+                  <span className="mono text-xs text-ink-faint" data-mono>pending</span>
+                </div>
               )}
             </div>
           );
