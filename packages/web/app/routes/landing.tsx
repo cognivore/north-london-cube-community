@@ -76,15 +76,6 @@ export default function Landing() {
               <Step n="03" text="Friday evening: show up, draft, play 3 rounds. The app handles pairings, timer, and standings." />
             </div>
           </div>
-
-          <div>
-            <h2 className="text-2xl font-semibold text-ink">Formats</h2>
-            <p className="mt-2 text-ink-soft">
-              Swiss draft, Team draft 2v2, 3v3, 4v4,
-              Rochester, Housman, Grid, Glimpse, Sealed.
-              Whatever the cube supports.
-            </p>
-          </div>
         </div>
       </section>
 
