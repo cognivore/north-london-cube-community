@@ -43,7 +43,7 @@ export async function action({ request, params }: { request: Request; params: { 
     const matchId = formData.get("matchId") as string;
     const p1Wins = parseInt(formData.get("p1wins") as string ?? "0", 10);
     const p2Wins = parseInt(formData.get("p2wins") as string ?? "0", 10);
-    const draws = formData.get("draw") ? 1 : 0;
+    const draws = parseInt(formData.get("draws") as string ?? "0", 10);
 
     const result = await api.reportMatch(matchId, { p1Wins, p2Wins, draws }, { headers: ch });
     if (!result.ok) return { error: result.error.message };
@@ -116,7 +116,11 @@ export default function RoundView() {
                     <div>
                       <p className="font-medium text-ink text-sm">{p1Name}</p>
                       {p1Pts != null && <p className="mono text-xs text-ink-faint" data-mono>{p1Pts} pts</p>}
-                      <div className="mt-2 flex justify-center gap-2">
+                      <div className="mt-2 flex justify-center gap-3">
+                        <label className="flex flex-col items-center cursor-pointer">
+                          <input type="radio" name="p1wins" value="0" defaultChecked className="accent-amber" />
+                          <span className="mono text-xs text-ink-faint" data-mono>0</span>
+                        </label>
                         <label className="flex flex-col items-center cursor-pointer">
                           <input type="radio" name="p1wins" value="1" className="accent-amber" />
                           <span className="mono text-xs text-ink-faint" data-mono>1</span>
@@ -130,11 +134,15 @@ export default function RoundView() {
 
                     {/* Draw column */}
                     <div>
-                      <p className="font-medium text-ink-faint text-sm">Draw?</p>
+                      <p className="font-medium text-ink-faint text-sm">Draws</p>
                       <p className="text-xs text-ink-faint">&nbsp;</p>
-                      <div className="mt-2 flex justify-center">
+                      <div className="mt-2 flex justify-center gap-3">
                         <label className="flex flex-col items-center cursor-pointer">
-                          <input type="checkbox" name="draw" value="1" className="accent-amber" />
+                          <input type="radio" name="draws" value="0" defaultChecked className="accent-amber" />
+                          <span className="mono text-xs text-ink-faint" data-mono>0</span>
+                        </label>
+                        <label className="flex flex-col items-center cursor-pointer">
+                          <input type="radio" name="draws" value="1" className="accent-amber" />
                           <span className="mono text-xs text-ink-faint" data-mono>1</span>
                         </label>
                       </div>
@@ -144,7 +152,11 @@ export default function RoundView() {
                     <div>
                       <p className="font-medium text-ink text-sm">{p2Name}</p>
                       {p2Pts != null && <p className="mono text-xs text-ink-faint" data-mono>{p2Pts} pts</p>}
-                      <div className="mt-2 flex justify-center gap-2">
+                      <div className="mt-2 flex justify-center gap-3">
+                        <label className="flex flex-col items-center cursor-pointer">
+                          <input type="radio" name="p2wins" value="0" defaultChecked className="accent-amber" />
+                          <span className="mono text-xs text-ink-faint" data-mono>0</span>
+                        </label>
                         <label className="flex flex-col items-center cursor-pointer">
                           <input type="radio" name="p2wins" value="1" className="accent-amber" />
                           <span className="mono text-xs text-ink-faint" data-mono>1</span>
