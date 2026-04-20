@@ -43,6 +43,11 @@ export const createCube = (input: {
     const logger = yield* Logger;
     const cubeRepo = yield* CubeRepo;
 
+    // Validate CubeCobra domain
+    if (!isCubecobraUrl(input.cubecobraUrl)) {
+      return yield* Effect.fail<CubeError>({ kind: "cube_not_found" });
+    }
+
     const cubeId = unsafeCubeId(yield* rng.uuid());
     const cubecobraId = extractCubecobraId(input.cubecobraUrl);
 
@@ -137,6 +142,15 @@ export const listAllCubes = () =>
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+
+function isCubecobraUrl(url: string): boolean {
+  try {
+    const u = new URL(url);
+    return u.hostname === "cubecobra.com" || u.hostname === "www.cubecobra.com";
+  } catch {
+    return false;
+  }
+}
 
 function extractCubecobraId(url: string): string {
   const match = url.match(/cubecobra\.com\/cube\/(?:overview|list|playtest)\/([^/?#]+)/);

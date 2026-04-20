@@ -122,7 +122,7 @@ export default function RoundView() {
                           <span className="mono text-xs text-ink-faint" data-mono>1</span>
                         </label>
                         <label className="flex flex-col items-center cursor-pointer">
-                          <input type="radio" name="p1wins" value="2" defaultChecked className="accent-amber" />
+                          <input type="radio" name="p1wins" value="2" className="accent-amber" />
                           <span className="mono text-xs text-ink-faint" data-mono>2</span>
                         </label>
                       </div>

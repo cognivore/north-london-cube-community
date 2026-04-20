@@ -77,7 +77,7 @@ export default function Landing() {
           <div>
             <h2 className="text-2xl font-semibold text-ink">Formats</h2>
             <p className="mt-2 text-ink-soft">
-              Swiss draft (4/6/8 players), Team draft 2v2, 3v3, 4v4,
+              Swiss draft, Team draft 2v2, 3v3, 4v4,
               Rochester, Housman, Grid, Glimpse, Sealed.
               Whatever the cube supports.
             </p>
