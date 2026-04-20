@@ -7,7 +7,15 @@ export default function Landing() {
     <div className="min-h-dvh flex flex-col bg-paper text-ink">
       {/* Hero */}
       <header className="flex-1 flex flex-col items-center justify-center px-4 text-center">
-        <h1 className="text-5xl font-semibold tracking-tight text-ink">
+        <img
+          src="/hero.webp"
+          alt="Cubehall"
+          width={640}
+          height={491}
+          className="w-full max-w-md"
+          style={{ imageRendering: "pixelated" }}
+        />
+        <h1 className="mt-6 text-5xl font-semibold tracking-tight text-ink">
           North London<br />
           <span className="text-amber">Cube Community</span>
         </h1>
