@@ -83,7 +83,7 @@ testmode.post("/phony-users", authMiddleware(), async (c) => {
     // RSVP if fridayId provided
     if (fridayId) {
       const rsvpId = crypto.randomUUID();
-      run(db, `INSERT OR IGNORE INTO rsvps (id, friday_id, user_id, state, created_at, last_transition_at) VALUES (?, ?, ?, 'in', ?, ?)`, [
+      run(db, `INSERT OR IGNORE INTO rsvps (id, friday_id, user_id, state, created_at, last_transition_at) VALUES (?, ?, ?, 'locked', ?, ?)`, [
         rsvpId, fridayId, id, now, now,
       ]);
     }
