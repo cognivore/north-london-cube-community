@@ -195,6 +195,7 @@ This table binds Silk filenames to Cubehall domain concepts. The mapping is cano
 | Cube (the list of cards)        | `bricks.png`                                    |
 | Invite code                     | `key.png`                                       |
 | Audit log                       | `book.png`                                      |
+| Door fee / entry                | `ruby.png`                                      |
 
 ### 5.4 Attribution — mandated
 
@@ -230,7 +231,7 @@ export type SilkIcon =
   | "tick" | "cross" | "user_delete"
   | "bullet_green" | "bullet_yellow" | "bullet_red"
   | "cog" | "arrow_refresh" | "magnifier"
-  | "page_white_text" | "bricks" | "key" | "book";
+  | "page_white_text" | "bricks" | "key" | "book" | "ruby";
 
 interface IconProps extends Omit<ImgHTMLAttributes<HTMLImageElement>, "src"> {
   name: SilkIcon;

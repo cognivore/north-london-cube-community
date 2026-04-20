@@ -19,7 +19,7 @@ export default function Colophon() {
             created by Mark James and released under a Creative Commons
             Attribution 2.5 licence. The set is available at{" "}
             <a
-              href="https://famfamfam.com/lab/icons/silk/"
+              href="https://github.com/markjames/famfamfam-silk-icons/blob/master/index.png"
               className="underline text-dci-teal"
               rel="noopener noreferrer"
             >
@@ -31,7 +31,7 @@ export default function Colophon() {
 
           <dl className="mt-6 border border-rule-heavy bg-paper-alt text-sm">
             <ColophonRow label="Author" value="Mark James" />
-            <ColophonRow label="Upstream" value="famfamfam.com/lab/icons/silk/" href="https://famfamfam.com/lab/icons/silk/" />
+            <ColophonRow label="Upstream" value="famfamfam.com/lab/icons/silk/" href="https://github.com/markjames/famfamfam-silk-icons/blob/master/index.png" />
             <ColophonRow label="Source mirror" value="github.com/markjames/famfamfam-silk-icons" href="https://github.com/markjames/famfamfam-silk-icons" />
             <ColophonRow label="Count" value="999 icons" />
             <ColophonRow label="Size / format" value="16x16 PNG" />
@@ -51,7 +51,7 @@ export default function Colophon() {
         <p className="mt-2 mono" style={{ fontSize: "11px" }}>
           Icons by{" "}
           <a
-            href="https://famfamfam.com/lab/icons/silk/"
+            href="https://github.com/markjames/famfamfam-silk-icons/blob/master/index.png"
             className="underline text-dci-teal"
             rel="noopener noreferrer"
           >

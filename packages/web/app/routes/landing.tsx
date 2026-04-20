@@ -60,7 +60,7 @@ export default function Landing() {
               <FrameworkRow icon="calendar" label="When" value="Every Friday" />
               <FrameworkRow icon="door_in" label="Doors" value="18:30" />
               <FrameworkRow icon="time" label="P1P1" value="18:45" />
-              <FrameworkRow icon="dice" label="Entry" value="£7 → venue credit (food & drinks)" last />
+              <FrameworkRow icon="ruby" label="Entry" value="£7 → venue credit (food & drinks)" last />
             </div>
             <p className="mt-3 text-sm text-ink-faint">
               Can't afford the &pound;7? RSVP with "Can't afford" and you will be
@@ -94,7 +94,7 @@ export default function Landing() {
         <p className="mt-2 mono" style={{ fontSize: "11px" }}>
           Icons by{" "}
           <a
-            href="https://famfamfam.com/lab/icons/silk/"
+            href="https://github.com/markjames/famfamfam-silk-icons/blob/master/index.png"
             className="underline text-dci-teal"
             rel="noopener noreferrer"
           >

@@ -8,7 +8,7 @@ export type SilkIcon =
   | "tick" | "cross" | "user_delete"
   | "bullet_green" | "bullet_yellow" | "bullet_red"
   | "cog" | "arrow_refresh" | "magnifier"
-  | "page_white_text" | "bricks" | "key" | "book";
+  | "page_white_text" | "bricks" | "key" | "book" | "ruby";
 
 interface IconProps extends Omit<ImgHTMLAttributes<HTMLImageElement>, "src"> {
   name: SilkIcon;
