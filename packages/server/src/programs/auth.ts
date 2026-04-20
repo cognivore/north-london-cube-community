@@ -130,7 +130,7 @@ export const register = (input: {
     yield* Effect.tryPromise({
       try: async () => {
         const { sendMagicLinkEmail } = await import("../email/sendgrid.js");
-        await sendMagicLinkEmail(input.email.trim().toLowerCase(), challengeToken as string, userId as string);
+        await sendMagicLinkEmail(input.email.trim().toLowerCase(), challengeToken as string, userId as string, true);
       },
       catch: (e) => {
         // Log but don't fail registration — user can request a new link

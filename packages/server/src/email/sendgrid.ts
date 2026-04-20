@@ -13,9 +13,26 @@ export async function sendMagicLinkEmail(
   to: string,
   token: string,
   userId: string,
+  isRegistration = false,
 ): Promise<void> {
   const magicLink = `${APP_URL}/auth/verify?userId=${userId}&token=${token}`;
+  const cocUrl = `${APP_URL}/code-of-conduct`;
   const actualTo = TEST_MODE ? TEST_REDIRECT_EMAIL : to;
+
+  const cocPlain = isRegistration
+    ? `\n\nBy joining the community you agree to follow our Code of Conduct:\n${cocUrl}\n`
+    : "";
+  const cocHtml = isRegistration
+    ? `\n  <p style="color: #a3a3a3; font-size: 13px; margin-top: 24px;">
+    By joining the community you agree to follow our <a href="${cocUrl}" style="color: #f59e0b; text-decoration: underline;">Code of Conduct</a>.
+  </p>`
+    : "";
+
+  const subject = isRegistration
+    ? "Welcome to North London Cube Community"
+    : "Sign in to North London Cube Community";
+  const ctaText = isRegistration ? "Confirm &amp; sign in" : "Sign in";
+  const ctaPlain = isRegistration ? "Confirm and sign in" : "sign in";
 
   const res = await fetch("https://api.sendgrid.com/v3/mail/send", {
     method: "POST",
@@ -26,11 +43,11 @@ export async function sendMagicLinkEmail(
     body: JSON.stringify({
       personalizations: [{ to: [{ email: actualTo }] }],
       from: { email: FROM_EMAIL, name: FROM_NAME },
-      subject: "Sign in to North London Cube Community",
+      subject,
       content: [
         {
           type: "text/plain",
-          value: `Click this link to sign in:\n\n${magicLink}\n\nThis link expires in 30 minutes.\n\nIf you didn't request this, ignore this email.`,
+          value: `Click this link to ${ctaPlain}:\n\n${magicLink}\n\nThis link expires in 30 minutes.${cocPlain}\n\nIf you didn't request this, ignore this email.`,
         },
         {
           type: "text/html",
@@ -41,16 +58,16 @@ export async function sendMagicLinkEmail(
   <h1 style="color: #f59e0b; font-size: 24px; margin-bottom: 8px;">North London Cube Community</h1>
   <p style="color: #a3a3a3; margin-bottom: 32px;">Friday night MTG cube drafts at Hitchhiker & Owl</p>
 
-  <p style="margin-bottom: 24px;">Click below to sign in:</p>
+  <p style="margin-bottom: 24px;">Click below to ${ctaPlain}:</p>
 
   <a href="${magicLink}" style="display: inline-block; background: #f59e0b; color: #0a0a0a; padding: 14px 32px; border-radius: 8px; text-decoration: none; font-weight: 700; font-size: 16px;">
-    Sign in
+    ${ctaText}
   </a>
 
   <p style="color: #737373; font-size: 13px; margin-top: 32px;">
     This link expires in 30 minutes. If you didn't request this, ignore this email.
   </p>
-
+${cocHtml}
   <p style="color: #525252; font-size: 12px; margin-top: 40px; border-top: 1px solid #262626; padding-top: 16px;">
     Hitchhiker & Owl, Palmers Green N13 &middot; Doors 18:30 &middot; P1P1 18:45
   </p>
