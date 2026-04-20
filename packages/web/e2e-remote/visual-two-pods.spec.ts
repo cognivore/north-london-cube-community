@@ -214,8 +214,8 @@ test.describe("VISUAL: Two pods, two cubes, full Friday lifecycle", () => {
     await expect(page.locator("h1")).toBeVisible();
 
     // See "Attending" count and "Cubes" count
-    await expect(page.locator("text=Attending")).toBeVisible();
-    await expect(page.locator("text=Cubes")).toBeVisible();
+    await expect(page.getByRole("heading", { name: /Attending/ })).toBeVisible();
+    await expect(page.getByRole("heading", { name: /Cubes/ })).toBeVisible();
     await page.waitForTimeout(2000);
 
     // =================================================================
