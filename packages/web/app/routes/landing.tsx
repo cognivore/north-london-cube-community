@@ -1,6 +1,22 @@
+import type { MetaFunction } from "react-router";
 import { Link } from "react-router";
 import { Icon } from "../components/Icon";
 import type { SilkIcon } from "../components/Icon";
+
+export const meta: MetaFunction = () => [
+  { title: "North London Cube Community" },
+  { name: "description", content: "Weekly MTG cube drafts every Friday at Owl & Hitchhiker, Archway N7. No committee, no gatekeeping — just show up and draft." },
+  { property: "og:title", content: "North London Cube Community" },
+  { property: "og:description", content: "Weekly MTG cube drafts every Friday at Owl & Hitchhiker, Archway N7." },
+  { property: "og:image", content: "https://north.cube.london/og.png" },
+  { property: "og:type", content: "website" },
+  { property: "og:url", content: "https://north.cube.london" },
+  { name: "twitter:card", content: "summary_large_image" },
+  { name: "twitter:title", content: "North London Cube Community" },
+  { name: "twitter:description", content: "Weekly MTG cube drafts every Friday at Owl & Hitchhiker, Archway N7." },
+  { name: "twitter:image", content: "https://north.cube.london/og.png" },
+  { name: "theme-color", content: "#f59e0b" },
+];
 
 export default function Landing() {
   return (
