@@ -56,7 +56,7 @@ export default function Landing() {
           <div>
             <h2 className="text-2xl font-semibold text-ink">The framework</h2>
             <div className="mt-3 border border-rule-heavy bg-paper-alt">
-              <FrameworkRow icon="house" label="Where" value="Hitchhiker & Owl, Palmers Green N13" />
+              <FrameworkRow icon="house" label="Where" value="Owl & Hitchhiker, 471 Holloway Rd, Archway N7" href="https://www.owlandhitchhiker.pub/" />
               <FrameworkRow icon="calendar" label="When" value="Every Friday" />
               <FrameworkRow icon="door_in" label="Doors" value="18:30" />
               <FrameworkRow icon="time" label="P1P1" value="18:45" />
@@ -102,11 +102,13 @@ function FrameworkRow({
   icon,
   label,
   value,
+  href,
   last = false,
 }: {
   icon: SilkIcon;
   label: string;
   value: string;
+  href?: string;
   last?: boolean;
 }) {
   return (
@@ -120,7 +122,11 @@ function FrameworkRow({
         <span style={{ fontVariant: "small-caps" }}>{label}</span>
       </span>
       <span className="mono text-ink text-sm" data-mono>
-        {value}
+        {href ? (
+          <a href={href} className="underline text-dci-teal" rel="noopener noreferrer">{value}</a>
+        ) : (
+          value
+        )}
       </span>
     </div>
   );

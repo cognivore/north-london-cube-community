@@ -14,7 +14,7 @@ test.describe("Landing page", () => {
 
   test("displays tagline describing the purpose", async ({ page }) => {
     await expect(
-      page.getByText("Friday night MTG cube drafts at Hitchhiker & Owl."),
+      page.getByText("Friday night MTG cube drafts at Owl & Hitchhiker."),
     ).toBeVisible();
   });
 

@@ -1313,7 +1313,7 @@ const EventOutboxRepoLive = Layer.succeed(EventOutboxRepo, {
 // Seed functions
 // ---------------------------------------------------------------------------
 
-/** Seed default venues (Hitchhiker and Owl) if they don't exist. */
+/** Seed default venue (Owl & Hitchhiker) if none exist. */
 export const seedVenues = Effect.tryPromise({
   try: async () => {
     const db = await getDb();
@@ -1323,14 +1323,8 @@ export const seedVenues = Effect.tryPromise({
     run(db,
       `INSERT INTO venues (id, name, address, capacity, max_pods, house_credit_per_player, active)
        VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      ["d0000000-0000-0000-0000-000000000001", "The Hitchhiker",
-       "263 Green Lanes, London N13 4XE", 16, 2, 700, 1],
-    );
-    run(db,
-      `INSERT INTO venues (id, name, address, capacity, max_pods, house_credit_per_player, active)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      ["d0000000-0000-0000-0000-000000000002", "The Owl",
-       "1 Aldermans Hill, London N13 4PM", 16, 2, 700, 1],
+      ["d0000000-0000-0000-0000-000000000001", "Owl & Hitchhiker",
+       "471 Holloway Rd, Archway, London N7 6LE", 16, 2, 700, 1],
     );
     persist();
   },

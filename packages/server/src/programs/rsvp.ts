@@ -201,7 +201,7 @@ export const rsvpIn = (input: { fridayId: string; userId: string; covered?: bool
                   personalizations: [{ to: [{ email: toEmail }] }],
                   from: { email: FROM_EMAIL, name: "North London Cube Community" },
                   subject: `${testPrefix}You're locked in for ${fri[0].date}`,
-                  content: [{ type: "text/plain", value: `Hi ${user[0].display_name},\n\nYou're locked in for Friday ${fri[0].date} at Hitchhiker & Owl.\n\nRSVP'd at: ${rsvpTime}\nDoors: 18:30\nP1P1: 18:45\n\nThis is a commitment to attend. See you there!\n\n${APP_URL}\n\n— Cubehall` }],
+                  content: [{ type: "text/plain", value: `Hi ${user[0].display_name},\n\nYou're locked in for Friday ${fri[0].date} at Owl & Hitchhiker.\n\nRSVP'd at: ${rsvpTime}\nDoors: 18:30\nP1P1: 18:45\n\nThis is a commitment to attend. See you there!\n\n${APP_URL}\n\n— Cubehall` }],
                 }),
               });
             }
@@ -363,7 +363,7 @@ function sendConfirmationEmail(userId: string, fridayId: string) {
           subject: `${testPrefix}You're confirmed for ${friday[0].date}`,
           content: [{
             type: "text/plain",
-            value: `Hi ${user[0].display_name},\n\nYou're confirmed for Friday ${friday[0].date} at Hitchhiker & Owl.\n\nRSVP'd at: ${rsvpTime}\nDoors: 18:30\nP1P1: 18:45\n\nYou are locked in — this is a commitment to attend. See you there!\n\n${APP_URL}\n\n— Cubehall`,
+            value: `Hi ${user[0].display_name},\n\nYou're confirmed for Friday ${friday[0].date} at Owl & Hitchhiker.\n\nRSVP'd at: ${rsvpTime}\nDoors: 18:30\nP1P1: 18:45\n\nYou are locked in — this is a commitment to attend. See you there!\n\n${APP_URL}\n\n— Cubehall`,
           }],
         }),
       });

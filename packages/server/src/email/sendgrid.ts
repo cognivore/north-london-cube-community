@@ -56,7 +56,7 @@ export async function sendMagicLinkEmail(
 <html>
 <body style="font-family: system-ui, sans-serif; max-width: 480px; margin: 0 auto; padding: 40px 20px; color: #e5e5e5; background: #0a0a0a;">
   <h1 style="color: #f59e0b; font-size: 24px; margin-bottom: 8px;">North London Cube Community</h1>
-  <p style="color: #a3a3a3; margin-bottom: 32px;">Friday night MTG cube drafts at Hitchhiker & Owl</p>
+  <p style="color: #a3a3a3; margin-bottom: 32px;">Friday night MTG cube drafts at Owl &amp; Hitchhiker</p>
 
   <p style="margin-bottom: 24px;">Click below to ${ctaPlain}:</p>
 
@@ -69,7 +69,7 @@ export async function sendMagicLinkEmail(
   </p>
 ${cocHtml}
   <p style="color: #525252; font-size: 12px; margin-top: 40px; border-top: 1px solid #262626; padding-top: 16px;">
-    Hitchhiker & Owl, Palmers Green N13 &middot; Doors 18:30 &middot; P1P1 18:45
+    <a href="https://www.owlandhitchhiker.pub/" style="color: #f59e0b; text-decoration: underline;">Owl &amp; Hitchhiker</a>, 471 Holloway Rd, Archway N7 &middot; Doors 18:30 &middot; P1P1 18:45
   </p>
 </body>
 </html>`,
