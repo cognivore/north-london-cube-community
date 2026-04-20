@@ -31,6 +31,18 @@ async function signInAsCoordinator(
   return { session: signInBody.sessionId, userId: coordinator.id };
 }
 
+async function signInAs(
+  request: APIRequestContext,
+  userId: string,
+): Promise<UserHandle> {
+  const signInRes = await request.post(`${API}/test/sign-in-as`, {
+    data: { userId },
+  });
+  expect(signInRes.status()).toBe(200);
+  const { sessionId } = await signInRes.json();
+  return { session: sessionId, userId };
+}
+
 function aGet(req: APIRequestContext, u: UserHandle, url: string) {
   return req.get(url, { headers: { Cookie: `session=${u.session}` } });
 }
@@ -114,21 +126,39 @@ test.describe("Team Draft 3v3 (6 players, 3 rounds, Latin square)", () => {
     expect((await advOpen.json()).friday.state.kind).toBe("open");
 
     // -----------------------------------------------------------------
-    // 5. Create 6 phony users (auto-RSVPed)
+    // 5. Create 6 phony users, update profiles, RSVP properly
     // -----------------------------------------------------------------
     const phonyRes = await aPost(request, coord, `${API}/test/phony-users`, {
       count: 6,
-      fridayId,
     });
     expect(phonyRes.status()).toBe(200);
     const { users: phonyUsers } = await phonyRes.json();
     expect(phonyUsers.length).toBe(6);
+
+    const phonyHandles: UserHandle[] = [];
+    for (const pu of phonyUsers) {
+      const handle = await signInAs(request, pu.id);
+      phonyHandles.push(handle);
+
+      const patchRes = await aPatch(request, handle, `${API}/me`, {
+        preferredFormats: ["team_draft_3v3"],
+        fallbackFormats: ["swiss_draft"],
+      });
+      expect(patchRes.status()).toBe(200);
+
+      const rsvpRes = await aPost(request, handle, `${API}/fridays/${fridayId}/rsvp`, {
+        action: "in",
+      });
+      expect(rsvpRes.status()).toBe(201);
+    }
 
     // -----------------------------------------------------------------
     // 6. Create 3v3 cube, enroll it
     // -----------------------------------------------------------------
     const patchRes = await aPatch(request, coord, `${API}/me`, {
       hostCapable: true,
+      preferredFormats: ["team_draft_3v3"],
+      fallbackFormats: ["swiss_draft"],
     });
     expect(patchRes.status()).toBe(200);
 
@@ -144,12 +174,6 @@ test.describe("Team Draft 3v3 (6 players, 3 rounds, Latin square)", () => {
     expect(createCubeRes.status()).toBe(201);
     const { cube } = await createCubeRes.json();
 
-    // Coordinator RSVPs too
-    const rsvpRes = await aPost(request, coord, `${API}/fridays/${fridayId}/rsvp`, {
-      action: "in",
-    });
-    expect([201, 409]).toContain(rsvpRes.status());
-
     const enrollRes = await aPost(
       request, coord,
       `${API}/fridays/${fridayId}/enrollments`,
@@ -164,8 +188,9 @@ test.describe("Team Draft 3v3 (6 players, 3 rounds, Latin square)", () => {
       request, coord,
       `${API}/lifecycle/fridays/${fridayId}/advance`,
     );
-    expect(advVoteClosed.status()).toBe(200);
-    expect((await advVoteClosed.json()).friday.state.kind).toBe("vote_closed");
+    const advVoteClosedBody = await advVoteClosed.json();
+    expect(advVoteClosed.status(), `advance to vote_closed failed: ${JSON.stringify(advVoteClosedBody)}`).toBe(200);
+    expect(advVoteClosedBody.friday.state.kind).toBe("vote_closed");
 
     // -----------------------------------------------------------------
     // 8. Advance: vote_closed -> confirmed
@@ -174,8 +199,9 @@ test.describe("Team Draft 3v3 (6 players, 3 rounds, Latin square)", () => {
       request, coord,
       `${API}/lifecycle/fridays/${fridayId}/advance`,
     );
-    expect(advConfirmed.status()).toBe(200);
-    expect((await advConfirmed.json()).friday.state.kind).toBe("confirmed");
+    const advConfirmedBody = await advConfirmed.json();
+    expect(advConfirmed.status(), `advance to confirmed failed: ${JSON.stringify(advConfirmedBody)}`).toBe(200);
+    expect(advConfirmedBody.friday.state.kind).toBe("confirmed");
 
     // -----------------------------------------------------------------
     // 9. Advance: confirmed -> in_progress
@@ -228,13 +254,12 @@ test.describe("Team Draft 3v3 (6 players, 3 rounds, Latin square)", () => {
     // 11-13. Play 3 rounds with Latin-square verification
     // -----------------------------------------------------------------
     for (let roundNum = 1; roundNum <= 3; roundNum++) {
-      // Start round
       const startRes = await request.post(
         `${API}/test/start-round/${podId}/${roundNum}`,
       );
-      expect(startRes.status()).toBe(200);
       const startBody = await startRes.json();
-      expect(startBody.pairings).toBeTruthy();
+      expect(startRes.status(), `start round ${roundNum} failed: ${JSON.stringify(startBody)}`).toBe(200);
+      expect(startBody.pairings, `round ${roundNum} pairings missing: ${JSON.stringify(startBody)}`).toBeTruthy();
       expect(startBody.pairings.length).toBe(3); // 3v3 = 3 matches per round
 
       // Fetch pod to get match details
@@ -284,7 +309,7 @@ test.describe("Team Draft 3v3 (6 players, 3 rounds, Latin square)", () => {
       expect(completeRes.status()).toBe(200);
     }
 
-    // Latin square: 3 rounds x 3 matches = 9 unique pairings (each A plays each B once)
+    // Latin square: 3 rounds x 3 matches = 9 unique pairings
     expect(allPairKeys.size).toBe(9);
 
     // -----------------------------------------------------------------

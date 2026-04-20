@@ -324,61 +324,71 @@ function greedyPair(
 }
 
 // ---------------------------------------------------------------------------
-// Team draft 3v3 — Round-robin cross-team (Latin square)
+// Team draft 2v2 / 3v3 — Round-robin cross-team (Latin square)
 // ---------------------------------------------------------------------------
 
 /**
- * 6 players, seats 0,2,4 -> Team A; seats 1,3,5 -> Team B.
- * 3 rounds, every A plays every B exactly once.
+ * Round-robin cross-team pairing using a Latin square.
  *
- * Latin square:
- *   Round 1: A0-B0, A1-B1, A2-B2
- *   Round 2: A0-B1, A1-B2, A2-B0
- *   Round 3: A0-B2, A1-B0, A2-B1
+ * Supports:
+ *   2v2 (pod size 4): 2 rounds, each A plays each B exactly once
+ *     Round 1: A0-B0, A1-B1
+ *     Round 2: A0-B1, A1-B0
+ *
+ *   3v3 (pod size 6): 3 rounds, each A plays each B exactly once
+ *     Round 1: A0-B0, A1-B1, A2-B2
+ *     Round 2: A0-B1, A1-B2, A2-B0
+ *     Round 3: A0-B2, A1-B0, A2-B1
+ *
+ * Formula: in round R (1-indexed), A[i] plays B[(i + R - 1) % teamSize].
  */
 function generateRoundRobinCrossTeam(
   seats: NonEmptyArray<Seat>,
   currentRound: number,
   podSize: EvenPodSize,
 ): PairingOutput {
-  if ((podSize as number) !== 6) {
+  const size = podSize as number;
+  if (size !== 4 && size !== 6) {
     return {
       _tag: "Err",
       error: {
         kind: "impossible_constraint",
-        reason: `round_robin_cross_team requires pod size 6, got ${podSize as number}`,
+        reason: `round_robin_cross_team requires pod size 4 or 6, got ${size}`,
       },
     };
   }
 
-  if (currentRound < 1 || currentRound > 3) {
+  const teamSize = size / 2; // 2 for 2v2, 3 for 3v3
+  const totalRounds = teamSize; // each A plays each B exactly once
+
+  if (currentRound < 1 || currentRound > totalRounds) {
     return {
       _tag: "Err",
       error: {
         kind: "impossible_constraint",
-        reason: `round_robin_cross_team supports rounds 1-3, got ${currentRound}`,
+        reason: `round_robin_cross_team supports rounds 1-${totalRounds}, got ${currentRound}`,
       },
     };
   }
 
   const { teamA, teamB } = splitTeams(seats);
 
-  if (teamA.length !== 3 || teamB.length !== 3) {
+  if (teamA.length !== teamSize || teamB.length !== teamSize) {
     return {
       _tag: "Err",
       error: {
         kind: "impossible_constraint",
-        reason: `Expected 3v3, got ${teamA.length}v${teamB.length}`,
+        reason: `Expected ${teamSize}v${teamSize}, got ${teamA.length}v${teamB.length}`,
       },
     };
   }
 
-  const roundIndex = currentRound - 1; // 0, 1, or 2
+  const roundIndex = currentRound - 1;
   const matches: PlannedMatch[] = [];
 
-  for (let i = 0; i < 3; i++) {
+  for (let i = 0; i < teamSize; i++) {
     const aPlayer = teamA[i]!;
-    const bPlayer = teamB[(i + roundIndex) % 3]!;
+    const bPlayer = teamB[(i + roundIndex) % teamSize]!;
     matches.push({ player1Id: aPlayer, player2Id: bPlayer });
   }
 

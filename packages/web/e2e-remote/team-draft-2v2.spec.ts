@@ -256,9 +256,10 @@ test.describe("Team Draft 2v2 (4 players, 2 rounds, Latin square)", () => {
     const startR1 = await request.post(
       `${API}/test/start-round/${podId}/1`,
     );
-    expect(startR1.status()).toBe(200);
     const r1Body = await startR1.json();
-    expect(r1Body.pairings).toBeTruthy();
+    expect(startR1.status(), `start round 1 failed: ${JSON.stringify(r1Body)}`).toBe(200);
+    expect(r1Body).not.toBeNull();
+    expect(r1Body.pairings, `round 1 pairings null — pairings engine may not support 2v2 yet`).toBeTruthy();
     expect(r1Body.pairings.length).toBe(2);
 
     // Re-fetch pod to get match details
@@ -307,9 +308,10 @@ test.describe("Team Draft 2v2 (4 players, 2 rounds, Latin square)", () => {
     const startR2 = await request.post(
       `${API}/test/start-round/${podId}/2`,
     );
-    expect(startR2.status()).toBe(200);
     const r2Body = await startR2.json();
-    expect(r2Body.pairings).toBeTruthy();
+    expect(startR2.status(), `start round 2 failed: ${JSON.stringify(r2Body)}`).toBe(200);
+    expect(r2Body).not.toBeNull();
+    expect(r2Body.pairings, `round 2 pairings null — pairings engine may not support 2v2 yet`).toBeTruthy();
     expect(r2Body.pairings.length).toBe(2);
 
     // Re-fetch pod
