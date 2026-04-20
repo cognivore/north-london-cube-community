@@ -98,7 +98,7 @@ async function injectSession(context: BrowserContext, sessionId: string) {
 // ---------------------------------------------------------------------------
 
 test.describe("VISUAL: Two pods, two cubes, full Friday lifecycle", () => {
-  test.slow(); // extend timeout for slow visual test
+  test.setTimeout(300_000); // 5 minutes — this is a visual demo, not a speed test
 
   test("watch the entire Friday unfold in the browser", async ({
     page,
@@ -199,7 +199,7 @@ test.describe("VISUAL: Two pods, two cubes, full Friday lifecycle", () => {
 
     await injectSession(context, coord.session);
     await page.goto(`${BASE}/app`);
-    await page.waitForLoadState("networkidle");
+    await page.waitForLoadState("domcontentloaded");
     await expect(page.locator("h1")).toContainText("This Friday");
     await page.waitForTimeout(1500);
 
@@ -208,7 +208,7 @@ test.describe("VISUAL: Two pods, two cubes, full Friday lifecycle", () => {
     // =================================================================
 
     await page.goto(`${BASE}/app/fridays/${fridayId}`);
-    await page.waitForLoadState("networkidle");
+    await page.waitForLoadState("domcontentloaded");
 
     // Verify the heading shows the date
     await expect(page.locator("h1")).toBeVisible();
@@ -232,7 +232,7 @@ test.describe("VISUAL: Two pods, two cubes, full Friday lifecycle", () => {
     const vcState = (await advVoteClosed.json()).friday.state.kind;
     expect(vcState).toBe("vote_closed");
 
-    await page.reload({ waitUntil: "networkidle" });
+    await page.reload({ waitUntil: "domcontentloaded" });
     await expect(page.getByText("vote closed").first()).toBeVisible();
     await page.waitForTimeout(1500);
 
@@ -245,7 +245,7 @@ test.describe("VISUAL: Two pods, two cubes, full Friday lifecycle", () => {
     expect(advConfirmed.status()).toBe(200);
     expect((await advConfirmed.json()).friday.state.kind).toBe("confirmed");
 
-    await page.reload({ waitUntil: "networkidle" });
+    await page.reload({ waitUntil: "domcontentloaded" });
     await expect(page.getByText("confirmed").first()).toBeVisible();
     // Pods section should now be visible
     await expect(page.getByRole("heading", { name: /Pods/ })).toBeVisible();
@@ -275,7 +275,7 @@ test.describe("VISUAL: Two pods, two cubes, full Friday lifecycle", () => {
     expect(advInProgress.status()).toBe(200);
     expect((await advInProgress.json()).friday.state.kind).toBe("in_progress");
 
-    await page.reload({ waitUntil: "networkidle" });
+    await page.reload({ waitUntil: "domcontentloaded" });
     await expect(page.getByText("in progress").first()).toBeVisible();
     await page.waitForTimeout(1500);
 
@@ -285,7 +285,7 @@ test.describe("VISUAL: Two pods, two cubes, full Friday lifecycle", () => {
 
     const pod1Id = podDetails[0].pod.id;
     await page.goto(`${BASE}/app/pods/${pod1Id}`);
-    await page.waitForLoadState("networkidle");
+    await page.waitForLoadState("domcontentloaded");
 
     await expect(page.locator("h1")).toContainText("Pod");
     await expect(page.getByRole("heading", { name: "Seats" })).toBeVisible();
@@ -310,7 +310,7 @@ test.describe("VISUAL: Two pods, two cubes, full Friday lifecycle", () => {
 
       // Navigate to round page in browser
       await page.goto(`${BASE}/app/pods/${pod1Id}/round/${rn}`);
-      await page.waitForLoadState("networkidle");
+      await page.waitForLoadState("domcontentloaded");
 
       await expect(page.locator("h1")).toContainText(`Round ${rn}`);
       await expect(page.getByRole("heading", { name: "Matches" })).toBeVisible();
@@ -342,7 +342,7 @@ test.describe("VISUAL: Two pods, two cubes, full Friday lifecycle", () => {
       }
 
       // Refresh round page to see reported scores
-      await page.reload({ waitUntil: "networkidle" });
+      await page.reload({ waitUntil: "domcontentloaded" });
       await page.waitForTimeout(2000);
 
       // Complete round via API
@@ -350,13 +350,13 @@ test.describe("VISUAL: Two pods, two cubes, full Friday lifecycle", () => {
 
       // After completing, navigate to pod page to see round status
       await page.goto(`${BASE}/app/pods/${pod1Id}`);
-      await page.waitForLoadState("networkidle");
+      await page.waitForLoadState("domcontentloaded");
       await page.waitForTimeout(1500);
     }
 
     // After all rounds, Pod 1 should show standings
     await page.goto(`${BASE}/app/pods/${pod1Id}`);
-    await page.waitForLoadState("networkidle");
+    await page.waitForLoadState("domcontentloaded");
     await expect(page.getByRole("heading", { name: "Standings" })).toBeVisible();
     await page.waitForTimeout(3000);
 
@@ -368,7 +368,7 @@ test.describe("VISUAL: Two pods, two cubes, full Friday lifecycle", () => {
     const pod2RoundCount = podDetails[1].rounds.length;
 
     await page.goto(`${BASE}/app/pods/${pod2Id}`);
-    await page.waitForLoadState("networkidle");
+    await page.waitForLoadState("domcontentloaded");
     await expect(page.locator("h1")).toContainText("Pod");
     await expect(page.getByRole("heading", { name: "Seats" })).toBeVisible();
     await page.waitForTimeout(1500);
@@ -380,7 +380,7 @@ test.describe("VISUAL: Two pods, two cubes, full Friday lifecycle", () => {
 
       // Navigate to round page
       await page.goto(`${BASE}/app/pods/${pod2Id}/round/${rn}`);
-      await page.waitForLoadState("networkidle");
+      await page.waitForLoadState("domcontentloaded");
       await expect(page.locator("h1")).toContainText(`Round ${rn}`);
       await page.waitForTimeout(2000);
 
@@ -408,7 +408,7 @@ test.describe("VISUAL: Two pods, two cubes, full Friday lifecycle", () => {
       }
 
       // Refresh to see scores
-      await page.reload({ waitUntil: "networkidle" });
+      await page.reload({ waitUntil: "domcontentloaded" });
       await page.waitForTimeout(1500);
 
       // Complete round
@@ -416,13 +416,13 @@ test.describe("VISUAL: Two pods, two cubes, full Friday lifecycle", () => {
 
       // Check pod page
       await page.goto(`${BASE}/app/pods/${pod2Id}`);
-      await page.waitForLoadState("networkidle");
+      await page.waitForLoadState("domcontentloaded");
       await page.waitForTimeout(1500);
     }
 
     // Pod 2 standings
     await page.goto(`${BASE}/app/pods/${pod2Id}`);
-    await page.waitForLoadState("networkidle");
+    await page.waitForLoadState("domcontentloaded");
     await expect(page.getByRole("heading", { name: "Standings" })).toBeVisible();
     await page.waitForTimeout(3000);
 
@@ -440,7 +440,7 @@ test.describe("VISUAL: Two pods, two cubes, full Friday lifecycle", () => {
 
     // Navigate to Friday detail and see "complete" state
     await page.goto(`${BASE}/app/fridays/${fridayId}`);
-    await page.waitForLoadState("networkidle");
+    await page.waitForLoadState("domcontentloaded");
     await expect(page.getByText("complete").first()).toBeVisible();
     await page.waitForTimeout(3000);
   });
