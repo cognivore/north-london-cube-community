@@ -38,13 +38,13 @@ testmode.post("/phony-users", authMiddleware(), async (c) => {
     "Alex", "Blake", "Casey", "Drew", "Ellis", "Finley", "Gray", "Harper",
     "Ira", "Jules", "Kit", "Lane", "Morgan", "Nat", "Oakley", "Pat",
   ];
-  // Only good people — Hall of Famers with clean records
   const surnames = [
     "Budde", "Finkel", "Nassif", "Karsten", "Juza", "Duke",
-    "Shenhar", "Manfield", "Hayne", "Levy", "Sigrist",
-    "Watanabe", "Yukuhiro", "Damo da Rosa", "Strasky",
-    "Mengucci", "Cifka", "Dezani", "Ruel", "Nakamura",
-    "Herberholz", "Utter-Leyton", "Black", "Froehlich", "Floch",
+    "Calcano", "Shenhar", "Manfield", "Stark", "Jensen",
+    "Hayne", "Levy", "Sigrist", "Watanabe", "Yukuhiro",
+    "Damo da Rosa", "Strasky", "Mengucci", "Cifka", "Dezani",
+    "Ruel", "Nakamura", "Herberholz", "Utter-Leyton", "Black",
+    "Froehlich", "Floch", "Dominguez",
   ];
 
   const db = await getDb();
