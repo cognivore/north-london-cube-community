@@ -201,7 +201,7 @@ test.describe("VISUAL: Two pods, two cubes, full Friday lifecycle", () => {
     await page.goto(`${BASE}/app`);
     await page.waitForLoadState("domcontentloaded");
     await expect(page.locator("h1")).toContainText("This Friday");
-    await page.waitForTimeout(1500);
+    await page.waitForTimeout(300);
 
     // =================================================================
     // STEP 3 — Browser: Navigate to the Friday detail page
@@ -216,7 +216,7 @@ test.describe("VISUAL: Two pods, two cubes, full Friday lifecycle", () => {
     // See "Attending" count and "Cubes" count
     await expect(page.getByRole("heading", { name: /Attending/ })).toBeVisible();
     await expect(page.getByRole("heading", { name: /Cubes/ })).toBeVisible();
-    await page.waitForTimeout(2000);
+    await page.waitForTimeout(500);
 
     // =================================================================
     // STEP 4 — Advance through states via API, refresh browser each time
@@ -234,7 +234,7 @@ test.describe("VISUAL: Two pods, two cubes, full Friday lifecycle", () => {
 
     await page.reload({ waitUntil: "domcontentloaded" });
     await expect(page.getByText("vote closed").first()).toBeVisible();
-    await page.waitForTimeout(1500);
+    await page.waitForTimeout(300);
 
     // 4b. Advance: vote_closed -> confirmed (pods created!)
     const advConfirmed = await aPost(
@@ -249,7 +249,7 @@ test.describe("VISUAL: Two pods, two cubes, full Friday lifecycle", () => {
     await expect(page.getByText("confirmed").first()).toBeVisible();
     // Pods section should now be visible
     await expect(page.getByRole("heading", { name: /Pods/ })).toBeVisible();
-    await page.waitForTimeout(2000);
+    await page.waitForTimeout(500);
 
     // 4c. Fetch pod details from API for later use
     const fridayDetail = await aGet(request, coord, `${API}/fridays/${fridayId}`);
@@ -277,7 +277,7 @@ test.describe("VISUAL: Two pods, two cubes, full Friday lifecycle", () => {
 
     await page.reload({ waitUntil: "domcontentloaded" });
     await expect(page.getByText("in progress").first()).toBeVisible();
-    await page.waitForTimeout(1500);
+    await page.waitForTimeout(300);
 
     // =================================================================
     // STEP 5 — Browser: Navigate to Pod 1, see seats
@@ -290,7 +290,7 @@ test.describe("VISUAL: Two pods, two cubes, full Friday lifecycle", () => {
     await expect(page.locator("h1")).toContainText("Pod");
     await expect(page.getByRole("heading", { name: "Seats" })).toBeVisible();
     await expect(page.getByRole("heading", { name: "Rounds" })).toBeVisible();
-    await page.waitForTimeout(2000);
+    await page.waitForTimeout(500);
 
     // =================================================================
     // STEP 6-9 — Play all rounds for Pod 1
@@ -314,7 +314,7 @@ test.describe("VISUAL: Two pods, two cubes, full Friday lifecycle", () => {
 
       await expect(page.locator("h1")).toContainText(`Round ${rn}`);
       await expect(page.getByRole("heading", { name: "Matches" })).toBeVisible();
-      await page.waitForTimeout(2000);
+      await page.waitForTimeout(500);
 
       // Re-fetch pod to get match IDs
       const podRefresh = await aGet(request, coord, `${API}/pods/${pod1Id}`);
@@ -343,7 +343,7 @@ test.describe("VISUAL: Two pods, two cubes, full Friday lifecycle", () => {
 
       // Refresh round page to see reported scores
       await page.reload({ waitUntil: "domcontentloaded" });
-      await page.waitForTimeout(2000);
+      await page.waitForTimeout(500);
 
       // Complete round via API
       await request.post(`${API}/test/complete-round/${pod1Id}/${rn}`);
@@ -351,14 +351,14 @@ test.describe("VISUAL: Two pods, two cubes, full Friday lifecycle", () => {
       // After completing, navigate to pod page to see round status
       await page.goto(`${BASE}/app/pods/${pod1Id}`);
       await page.waitForLoadState("domcontentloaded");
-      await page.waitForTimeout(1500);
+      await page.waitForTimeout(300);
     }
 
     // After all rounds, Pod 1 should show standings
     await page.goto(`${BASE}/app/pods/${pod1Id}`);
     await page.waitForLoadState("domcontentloaded");
     await expect(page.getByRole("heading", { name: "Standings" })).toBeVisible();
-    await page.waitForTimeout(3000);
+    await page.waitForTimeout(800);
 
     // =================================================================
     // STEP 10 — Pod 2: same cycle
@@ -371,7 +371,7 @@ test.describe("VISUAL: Two pods, two cubes, full Friday lifecycle", () => {
     await page.waitForLoadState("domcontentloaded");
     await expect(page.locator("h1")).toContainText("Pod");
     await expect(page.getByRole("heading", { name: "Seats" })).toBeVisible();
-    await page.waitForTimeout(1500);
+    await page.waitForTimeout(300);
 
     for (let rn = 1; rn <= pod2RoundCount; rn++) {
       // Start round via API
@@ -382,7 +382,7 @@ test.describe("VISUAL: Two pods, two cubes, full Friday lifecycle", () => {
       await page.goto(`${BASE}/app/pods/${pod2Id}/round/${rn}`);
       await page.waitForLoadState("domcontentloaded");
       await expect(page.locator("h1")).toContainText(`Round ${rn}`);
-      await page.waitForTimeout(2000);
+      await page.waitForTimeout(500);
 
       // Fetch matches
       const podRefresh = await aGet(request, coord, `${API}/pods/${pod2Id}`);
@@ -409,7 +409,7 @@ test.describe("VISUAL: Two pods, two cubes, full Friday lifecycle", () => {
 
       // Refresh to see scores
       await page.reload({ waitUntil: "domcontentloaded" });
-      await page.waitForTimeout(1500);
+      await page.waitForTimeout(300);
 
       // Complete round
       await request.post(`${API}/test/complete-round/${pod2Id}/${rn}`);
@@ -417,14 +417,14 @@ test.describe("VISUAL: Two pods, two cubes, full Friday lifecycle", () => {
       // Check pod page
       await page.goto(`${BASE}/app/pods/${pod2Id}`);
       await page.waitForLoadState("domcontentloaded");
-      await page.waitForTimeout(1500);
+      await page.waitForTimeout(300);
     }
 
     // Pod 2 standings
     await page.goto(`${BASE}/app/pods/${pod2Id}`);
     await page.waitForLoadState("domcontentloaded");
     await expect(page.getByRole("heading", { name: "Standings" })).toBeVisible();
-    await page.waitForTimeout(3000);
+    await page.waitForTimeout(800);
 
     // =================================================================
     // STEP 11 — Complete the Friday
@@ -442,6 +442,6 @@ test.describe("VISUAL: Two pods, two cubes, full Friday lifecycle", () => {
     await page.goto(`${BASE}/app/fridays/${fridayId}`);
     await page.waitForLoadState("domcontentloaded");
     await expect(page.getByText("complete").first()).toBeVisible();
-    await page.waitForTimeout(3000);
+    await page.waitForTimeout(800);
   });
 });
