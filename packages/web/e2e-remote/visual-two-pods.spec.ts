@@ -233,7 +233,7 @@ test.describe("VISUAL: Two pods, two cubes, full Friday lifecycle", () => {
     expect(vcState).toBe("vote_closed");
 
     await page.reload({ waitUntil: "networkidle" });
-    await expect(page.locator("text=vote closed")).toBeVisible();
+    await expect(page.getByText("vote closed").first()).toBeVisible();
     await page.waitForTimeout(1500);
 
     // 4b. Advance: vote_closed -> confirmed (pods created!)
@@ -246,9 +246,9 @@ test.describe("VISUAL: Two pods, two cubes, full Friday lifecycle", () => {
     expect((await advConfirmed.json()).friday.state.kind).toBe("confirmed");
 
     await page.reload({ waitUntil: "networkidle" });
-    await expect(page.locator("text=confirmed")).toBeVisible();
+    await expect(page.getByText("confirmed").first()).toBeVisible();
     // Pods section should now be visible
-    await expect(page.locator("text=Pods")).toBeVisible();
+    await expect(page.getByRole("heading", { name: /Pods/ })).toBeVisible();
     await page.waitForTimeout(2000);
 
     // 4c. Fetch pod details from API for later use
@@ -276,7 +276,7 @@ test.describe("VISUAL: Two pods, two cubes, full Friday lifecycle", () => {
     expect((await advInProgress.json()).friday.state.kind).toBe("in_progress");
 
     await page.reload({ waitUntil: "networkidle" });
-    await expect(page.locator("text=in progress")).toBeVisible();
+    await expect(page.getByText("in progress").first()).toBeVisible();
     await page.waitForTimeout(1500);
 
     // =================================================================
@@ -288,8 +288,8 @@ test.describe("VISUAL: Two pods, two cubes, full Friday lifecycle", () => {
     await page.waitForLoadState("networkidle");
 
     await expect(page.locator("h1")).toContainText("Pod");
-    await expect(page.locator("text=Seats")).toBeVisible();
-    await expect(page.locator("text=Rounds")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Seats" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Rounds" })).toBeVisible();
     await page.waitForTimeout(2000);
 
     // =================================================================
@@ -313,7 +313,7 @@ test.describe("VISUAL: Two pods, two cubes, full Friday lifecycle", () => {
       await page.waitForLoadState("networkidle");
 
       await expect(page.locator("h1")).toContainText(`Round ${rn}`);
-      await expect(page.locator("text=Matches")).toBeVisible();
+      await expect(page.getByRole("heading", { name: "Matches" })).toBeVisible();
       await page.waitForTimeout(2000);
 
       // Re-fetch pod to get match IDs
@@ -357,7 +357,7 @@ test.describe("VISUAL: Two pods, two cubes, full Friday lifecycle", () => {
     // After all rounds, Pod 1 should show standings
     await page.goto(`${BASE}/app/pods/${pod1Id}`);
     await page.waitForLoadState("networkidle");
-    await expect(page.locator("text=Standings")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Standings" })).toBeVisible();
     await page.waitForTimeout(3000);
 
     // =================================================================
@@ -370,7 +370,7 @@ test.describe("VISUAL: Two pods, two cubes, full Friday lifecycle", () => {
     await page.goto(`${BASE}/app/pods/${pod2Id}`);
     await page.waitForLoadState("networkidle");
     await expect(page.locator("h1")).toContainText("Pod");
-    await expect(page.locator("text=Seats")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Seats" })).toBeVisible();
     await page.waitForTimeout(1500);
 
     for (let rn = 1; rn <= pod2RoundCount; rn++) {
@@ -423,7 +423,7 @@ test.describe("VISUAL: Two pods, two cubes, full Friday lifecycle", () => {
     // Pod 2 standings
     await page.goto(`${BASE}/app/pods/${pod2Id}`);
     await page.waitForLoadState("networkidle");
-    await expect(page.locator("text=Standings")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Standings" })).toBeVisible();
     await page.waitForTimeout(3000);
 
     // =================================================================
@@ -441,7 +441,7 @@ test.describe("VISUAL: Two pods, two cubes, full Friday lifecycle", () => {
     // Navigate to Friday detail and see "complete" state
     await page.goto(`${BASE}/app/fridays/${fridayId}`);
     await page.waitForLoadState("networkidle");
-    await expect(page.locator("text=complete")).toBeVisible();
+    await expect(page.getByText("complete").first()).toBeVisible();
     await page.waitForTimeout(3000);
   });
 });
