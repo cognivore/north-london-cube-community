@@ -10,9 +10,8 @@ export default function Landing() {
         <img
           src="/hero.webp"
           alt="Cubehall"
-          width={640}
-          height={491}
-          className="w-full max-w-md"
+          width={334}
+          height={256}
           style={{ imageRendering: "pixelated" }}
         />
         <h1 className="mt-6 text-5xl font-semibold tracking-tight text-ink">
