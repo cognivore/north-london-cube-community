@@ -46,10 +46,10 @@ export default function Landing() {
               There is no committee, no membership fee, no gatekeeping.
               Anyone can bring a cube. Anyone can show up and play.
               The only thing that's fixed is the framework: every Friday,
-              same venue, same time. We follow the{" "}
-              <a href="https://berlincodeofconduct.org/" className="text-dci-teal underline" rel="noopener noreferrer">
-                Berlin Code of Conduct
-              </a>.
+              same venue, same time. We follow a{" "}
+              <a href="/code-of-conduct" className="text-dci-teal underline">Code of Conduct</a>{" "}
+              based on the{" "}
+              <a href="https://berlincodeofconduct.org/" className="text-dci-teal underline" rel="noopener noreferrer">Berlin Code of Conduct</a>.
             </p>
           </div>
 

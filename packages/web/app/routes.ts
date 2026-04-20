@@ -3,6 +3,7 @@ import { type RouteConfig, index, layout, prefix, route } from "@react-router/de
 export default [
   index("routes/landing.tsx"),
   route("colophon", "routes/colophon.tsx"),
+  route("code-of-conduct", "routes/code-of-conduct.tsx"),
   route("login", "routes/login.tsx"),
   route("register", "routes/register.tsx"),
   route("auth/verify", "routes/auth-verify.tsx"),

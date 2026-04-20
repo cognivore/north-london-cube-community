@@ -38,25 +38,38 @@ testmode.post("/phony-users", authMiddleware(), async (c) => {
     "Alex", "Blake", "Casey", "Drew", "Ellis", "Finley", "Gray", "Harper",
     "Ira", "Jules", "Kit", "Lane", "Morgan", "Nat", "Oakley", "Pat",
   ];
+  // Only good people — Hall of Famers with clean records
   const surnames = [
-    "Budde", "Finkel", "Nassif", "Wafo-Tapa", "Karsten", "Juza", "Duke",
-    "Calcano", "Shenhar", "Manfield", "Stark", "Jensen", "Turtenwald",
-    "Hayne", "Levy", "Sigrist", "Watanabe", "Yukuhiro", "Damo da Rosa",
-    "Dominguez", "Floch", "Strasky", "Mengucci", "Cifka", "Dezani",
+    "Budde", "Finkel", "Nassif", "Karsten", "Juza", "Duke",
+    "Shenhar", "Manfield", "Hayne", "Levy", "Sigrist",
+    "Watanabe", "Yukuhiro", "Damo da Rosa", "Strasky",
+    "Mengucci", "Cifka", "Dezani", "Ruel", "Nakamura",
+    "Herberholz", "Utter-Leyton", "Black", "Froehlich", "Floch",
   ];
 
   const db = await getDb();
-  const existingCount = query<{ cnt: number }>(db, "SELECT count(*) as cnt FROM users WHERE email LIKE 'phony-%'");
-  const nameOffset = existingCount[0]?.cnt ?? 0;
+
+  // Shuffle both arrays using timestamp seed for variety
+  const seed = Date.now();
+  const shuffle = <T,>(arr: T[]): T[] => {
+    const a = [...arr];
+    for (let i = a.length - 1; i > 0; i--) {
+      const j = Math.abs(((seed * (i + 1) * 2654435761) >> 16) % (i + 1));
+      [a[i], a[j]] = [a[j]!, a[i]!];
+    }
+    return a;
+  };
+  const shuffledFirst = shuffle(firstNames);
+  const shuffledLast = shuffle(surnames);
 
   const users: Array<{ id: string; email: string; displayName: string }> = [];
   const now = new Date().toISOString();
 
   for (let i = 0; i < count; i++) {
     const id = crypto.randomUUID();
-    const fi = (nameOffset + i) % firstNames.length;
-    const si = Math.floor((nameOffset + i) / firstNames.length) % surnames.length;
-    const name = `${firstNames[fi]} ${surnames[si]}`;
+    const fi = i % shuffledFirst.length;
+    const si = i % shuffledLast.length;
+    const name = `${shuffledFirst[fi]} ${shuffledLast[si]}`;
     const email = `phony-${id.slice(0, 8)}@test.local`;
 
     run(db, `INSERT INTO users (id, email, display_name, created_at, auth_state, profile, role) VALUES (?, ?, ?, ?, ?, ?, ?)`, [
