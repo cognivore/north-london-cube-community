@@ -28,6 +28,10 @@ export default function Login() {
           <p className="mt-2 text-sm text-ink-faint">
             Click the link in the email to sign in. It expires in 30 minutes.
           </p>
+          <p className="mt-3 text-sm text-amber">
+            Our emails may land in spam — please check your junk folder
+            and mark us as "not spam" if so!
+          </p>
           <Form method="post" className="mt-6">
             <input type="hidden" name="email" value={actionData.email} />
             <button

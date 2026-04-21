@@ -30,6 +30,10 @@ export default function Register() {
           <p className="mt-2 text-sm text-ink-faint">
             Click the link in the email to complete registration. It expires in 30 minutes.
           </p>
+          <p className="mt-3 text-sm text-amber">
+            We're a new community so our emails may land in spam.
+            Please check your junk folder and mark us as "not spam" if so!
+          </p>
         </div>
       </div>
     );

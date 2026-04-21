@@ -223,8 +223,10 @@ export default function FridayDetail() {
                   </button>
                 </Form>
               </div>
+            ) : myRsvp?.state === "confirmed" ? (
+              <p className="text-sm text-ok font-medium">You're confirmed! You'll be fully locked in after 30 minutes.</p>
             ) : (
-              <p className="text-sm text-ok font-medium">You're confirmed and locked in.</p>
+              <p className="text-sm text-ok font-medium">You're locked in. See you there!</p>
             )}
           </div>
         )}

@@ -146,8 +146,13 @@ export const rsvpIn = (input: { fridayId: string; userId: string; covered?: bool
       const pendingRsvp = allRsvps.find(r => r.state === "pending");
       if (pendingRsvp) {
         yield* rsvpRepo.updateState(pendingRsvp.id, "confirmed" as RsvpState, now);
-        yield* logger.info("Paired RSVP confirmed — emails will be sent when locked", { userId: pendingRsvp.userId });
+        yield* logger.info("Paired RSVP confirmed", { userId: pendingRsvp.userId });
+        // Send confirmation email to the paired partner
+        yield* sendConfirmationEmail(pendingRsvp.userId as string, input.fridayId);
       }
+
+      // Send confirmation email to the person who just RSVP'd
+      yield* sendConfirmationEmail(input.userId, input.fridayId);
 
       // Notify coordinators about covered RSVPs if applicable
       if (input.covered) {
