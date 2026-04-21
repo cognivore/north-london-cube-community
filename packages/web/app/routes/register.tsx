@@ -5,9 +5,8 @@ export async function action({ request }: { request: Request }) {
   const formData = await request.formData();
   const email = formData.get("email") as string;
   const displayName = formData.get("displayName") as string;
-  const inviteCode = formData.get("inviteCode") as string;
 
-  const result = await api.register({ email, displayName, inviteCode });
+  const result = await api.register({ email, displayName });
   if (!result.ok) {
     return { error: result.error.message };
   }
@@ -77,20 +76,6 @@ export default function Register() {
               required
               className="mt-1 block w-full rounded-sm border border-rule-heavy bg-paper px-3 py-2.5 text-ink placeholder:text-ink-faint focus:border-dci-teal focus:outline-none focus:ring-1 focus:ring-dci-teal"
               placeholder="Your name"
-            />
-          </div>
-
-          <div>
-            <label htmlFor="inviteCode" className="block text-sm font-medium text-ink-soft">
-              Invite code
-            </label>
-            <input
-              id="inviteCode"
-              name="inviteCode"
-              type="text"
-              required
-              className="mt-1 block w-full rounded-sm border border-rule-heavy bg-paper px-3 py-2.5 text-ink placeholder:text-ink-faint focus:border-dci-teal focus:outline-none focus:ring-1 focus:ring-dci-teal"
-              placeholder="Enter your invite code"
             />
           </div>
 

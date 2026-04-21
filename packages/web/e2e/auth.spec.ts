@@ -19,7 +19,6 @@ test.describe("Registration page", () => {
   test("renders all form fields and submit button", async ({ page }) => {
     await expect(page.getByLabel("Email")).toBeVisible();
     await expect(page.getByLabel("Display name")).toBeVisible();
-    await expect(page.getByLabel("Invite code")).toBeVisible();
     await expect(
       page.getByRole("button", { name: "Create account" }),
     ).toBeVisible();
@@ -32,13 +31,19 @@ test.describe("Registration page", () => {
     await expect(page).toHaveURL("/login");
   });
 
-  test("invalid invite code shows error message", async ({ page }) => {
-    await page.getByLabel("Email").fill("bad-invite@example.com");
-    await page.getByLabel("Display name").fill("Bad Invite User");
-    await page.getByLabel("Invite code").fill("WRONG-CODE");
+  test("duplicate email shows error message", async ({ page }) => {
+    // Register once via API
+    const unique = `dup-ui-${Date.now()}@example.com`;
+    await page.request.post("http://localhost:37556/api/auth/register", {
+      data: { email: unique, displayName: "First" },
+    });
+
+    // Try same email via form
+    await page.getByLabel("Email").fill(unique);
+    await page.getByLabel("Display name").fill("Second");
     await page.getByRole("button", { name: "Create account" }).click();
 
-    await expect(page.getByText("Invalid or expired invite code")).toBeVisible();
+    await expect(page.getByText("Email already registered")).toBeVisible();
   });
 });
 
@@ -97,7 +102,6 @@ test.describe("Registration API", () => {
       data: {
         email: unique,
         displayName: "API Test User",
-        inviteCode: "NLCC2026",
       },
     });
     expect(registerRes.status()).toBe(201);
@@ -121,21 +125,6 @@ test.describe("Registration API", () => {
     expect(verifyBody.user.displayName).toBe("API Test User");
   });
 
-  test("register with invalid invite code fails", async ({ request }) => {
-    const registerRes = await request.post("http://localhost:37556/api/auth/register", {
-      data: {
-        email: "bad-code@example.com",
-        displayName: "Bad Code User",
-        inviteCode: "INVALID",
-      },
-    });
-    // Server returns 500 due to Effect error wrapping in catch block
-    expect(registerRes.ok()).toBe(false);
-
-    const body = await registerRes.json();
-    expect(body.error).toBeTruthy();
-  });
-
   test("register then login creates session via API", async ({ request }) => {
     const unique = `login-test-${Date.now()}@example.com`;
 
@@ -144,7 +133,6 @@ test.describe("Registration API", () => {
       data: {
         email: unique,
         displayName: "Login Test User",
-        inviteCode: "NLCC2026",
       },
     });
     const { userId, challengeToken } = await registerRes.json();
@@ -171,7 +159,6 @@ test.describe("Registration API", () => {
       data: {
         email: unique,
         displayName: "First User",
-        inviteCode: "NLCC2026",
       },
     });
     expect(firstRes.status()).toBe(201);
@@ -181,7 +168,6 @@ test.describe("Registration API", () => {
       data: {
         email: unique,
         displayName: "Duplicate User",
-        inviteCode: "NLCC2026",
       },
     });
     // Server returns 500 due to Effect error wrapping in catch block

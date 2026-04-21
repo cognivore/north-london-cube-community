@@ -39,7 +39,6 @@ auth.post("/register", async (c) => {
       register({
         email: body.email,
         displayName: body.displayName,
-        inviteCode: body.inviteCode,
       }),
     );
     return c.json({
@@ -48,8 +47,8 @@ auth.post("/register", async (c) => {
     }, 201);
   } catch (e: unknown) {
     const kind = extractErrorKind(e);
-    if (kind === "invalid_invite_code") {
-      return apiError(c, 400, "INVALID_INVITE", "Invalid or expired invite code");
+    if (kind === "registration_closed") {
+      return apiError(c, 403, "REGISTRATION_CLOSED", "Registration is not open on this environment");
     }
     if (kind === "email_taken") {
       return apiError(c, 409, "EMAIL_TAKEN", "Email already registered");

@@ -132,7 +132,7 @@ function toUser(r: UserRow): User {
     createdAt: unsafeISO8601(r.created_at),
     authState: JSON.parse(r.auth_state) as AuthState,
     profile: JSON.parse(r.profile) as UserProfile,
-    role: r.role as "member" | "admin",
+    role: r.role as "member" | "coordinator",
   };
 }
 

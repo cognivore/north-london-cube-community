@@ -22,7 +22,6 @@ import { DraftFormatSchema } from "./entities.js";
 export const RegisterInputSchema = z.object({
   email: EmailSchema,
   displayName: NonEmptyStringSchema,
-  inviteCode: z.string(),
 });
 
 export type RegisterInput = z.infer<typeof RegisterInputSchema>;

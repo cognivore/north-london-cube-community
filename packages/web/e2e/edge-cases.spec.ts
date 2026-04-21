@@ -20,7 +20,7 @@ async function registerUser(
   const email = `${name}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}@test.local`;
 
   const regRes = await request.post(`${API}/api/auth/register`, {
-    data: { email, displayName: name, inviteCode: "NLCC2026" },
+    data: { email, displayName: name },
   });
   expect(regRes.status()).toBe(201);
   const { userId, challengeToken } = await regRes.json();

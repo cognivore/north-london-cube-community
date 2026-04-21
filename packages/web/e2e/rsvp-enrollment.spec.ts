@@ -18,7 +18,6 @@ async function registerAndVerify(
     data: {
       email,
       displayName: `Test ${suffix}`,
-      inviteCode: "NLCC2026",
     },
   });
   expect(regRes.status()).toBe(201);

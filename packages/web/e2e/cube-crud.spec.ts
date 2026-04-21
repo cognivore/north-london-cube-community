@@ -14,7 +14,7 @@ async function registerAndGetSession(
   const email = `cube-${suffix}-${Date.now()}@example.com`;
 
   const regRes = await request.post(`${API}/api/auth/register`, {
-    data: { email, displayName: `Cube ${suffix}`, inviteCode: "NLCC2026" },
+    data: { email, displayName: `Cube ${suffix}` },
   });
   expect(regRes.status()).toBe(201);
   const { userId, challengeToken } = await regRes.json();

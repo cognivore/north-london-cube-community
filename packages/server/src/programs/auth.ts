@@ -14,7 +14,7 @@ import {
 import { Clock } from "../capabilities/clock.js";
 import { RNG } from "../capabilities/rng.js";
 import { Logger } from "../capabilities/logger.js";
-import { UserRepo, SessionRepo, InviteCodeRepo } from "../repos/types.js";
+import { UserRepo, SessionRepo } from "../repos/types.js";
 import type { RepoError } from "../repos/types.js";
 
 // ---------------------------------------------------------------------------
@@ -22,7 +22,7 @@ import type { RepoError } from "../repos/types.js";
 // ---------------------------------------------------------------------------
 
 export type AuthError =
-  | { readonly kind: "invalid_invite_code" }
+  | { readonly kind: "registration_closed" }
   | { readonly kind: "email_taken" }
   | { readonly kind: "user_not_found" }
   | { readonly kind: "user_suspended" }
@@ -38,33 +38,16 @@ export type AuthError =
 export const register = (input: {
   email: string;
   displayName: string;
-  inviteCode: string;
 }) =>
   Effect.gen(function* () {
     const clock = yield* Clock;
     const rng = yield* RNG;
     const logger = yield* Logger;
     const userRepo = yield* UserRepo;
-    const inviteRepo = yield* InviteCodeRepo;
 
     // In TEST_MODE, only coordinator email can register
     if (process.env.TEST_MODE === "true" && input.email.trim().toLowerCase() !== "jm@memorici.de") {
-      return yield* Effect.fail<AuthError>({ kind: "invalid_invite_code" });
-    }
-
-    // Validate invite code
-    const invite = yield* inviteRepo.findByCode(input.inviteCode);
-    if (!invite) {
-      return yield* Effect.fail<AuthError>({ kind: "invalid_invite_code" });
-    }
-    if (invite.maxUses !== null && invite.usedCount >= invite.maxUses) {
-      return yield* Effect.fail<AuthError>({ kind: "invalid_invite_code" });
-    }
-    if (invite.expiresAt !== null) {
-      const now = yield* clock.now();
-      if (now > invite.expiresAt) {
-        return yield* Effect.fail<AuthError>({ kind: "invalid_invite_code" });
-      }
+      return yield* Effect.fail<AuthError>({ kind: "registration_closed" });
     }
 
     // Check email uniqueness
@@ -103,7 +86,6 @@ export const register = (input: {
     };
 
     yield* userRepo.create(user);
-    yield* inviteRepo.incrementUsage(input.inviteCode);
 
     // Assign DCI number
     yield* Effect.tryPromise({

@@ -64,7 +64,6 @@ test.describe("Cubes API", () => {
       data: {
         email: unique,
         displayName: "Cube Creator",
-        inviteCode: "NLCC2026",
       },
     });
     const { userId, challengeToken } = await registerRes.json();
