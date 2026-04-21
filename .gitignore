@@ -15,3 +15,5 @@ test-results/
 .cache/
 build/
 .react-router/
+*.db
+packages/server/data/
