@@ -69,20 +69,17 @@ export async function runMatching(fridayId: string) {
 
   if (lockable.length === 0) return;
 
-  // Ensure even count — the most-recent waits for a partner
-  const batch = [...lockable];
-  if (batch.length % 2 !== 0) batch.pop();
-  if (batch.length === 0) return;
-
+  // Lock everyone past grace — even/odd is an RSVP-in concern, not a locking concern.
+  // The pod packer handles whatever player count it gets at advance time.
   const now = new Date().toISOString();
-  for (const r of batch) {
+  for (const r of lockable) {
     dbRun(db,
       "UPDATE rsvps SET state = 'locked', last_transition_at = ? WHERE id = ? AND state = 'confirmed'",
       [now, r.id]);
   }
   persist();
 
-  for (const r of batch) {
+  for (const r of lockable) {
     await sendLockEmail(r.user_id, fridayId).catch(e =>
       console.error("Lock email failed:", e));
   }
