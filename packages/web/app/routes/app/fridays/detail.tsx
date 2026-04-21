@@ -225,16 +225,16 @@ export default function FridayDetail() {
               </div>
             ) : myRsvp?.state === "confirmed" ? (
               <div className="space-y-2">
-                <p className="text-sm text-amber font-medium">You're paired up! You have 30 minutes to change your mind.</p>
                 <Form method="post">
                   <input type="hidden" name="intent" value="rsvp-out" />
                   <button
                     type="submit"
-                    className="rounded-sm bg-paper border border-rule-heavy px-4 py-3 text-sm font-medium text-ink-soft hover:bg-paper-alt min-h-[44px]"
+                    className="rounded-sm bg-paper border border-rule px-4 py-2.5 text-sm text-ink-faint hover:bg-paper-alt min-h-[44px]"
                   >
-                    Withdraw (grace period)
+                    Withdraw
                   </button>
                 </Form>
+                <p className="text-xs text-ink-faint">lock-in in 30&rsquo;</p>
               </div>
             ) : (
               <p className="text-sm text-ok font-medium">You're locked in. See you there!</p>
