@@ -171,6 +171,13 @@ const SCHEMA = `
     last_error TEXT
   );
 
+  CREATE TABLE IF NOT EXISTS sent_emails (
+    id TEXT PRIMARY KEY,
+    friday_id TEXT NOT NULL,
+    email_type TEXT NOT NULL,
+    sent_at TEXT NOT NULL
+  );
+
   CREATE INDEX IF NOT EXISTS idx_rsvps_friday ON rsvps(friday_id);
   CREATE INDEX IF NOT EXISTS idx_enrollments_friday ON enrollments(friday_id);
   CREATE INDEX IF NOT EXISTS idx_pods_friday ON pods(friday_id);

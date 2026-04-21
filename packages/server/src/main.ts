@@ -12,6 +12,7 @@ import { makeLoggerLive } from "./capabilities/logger.js";
 import { EventBus } from "./capabilities/event-bus.js";
 import { Audit } from "./capabilities/audit.js";
 import { getDb, persist, close } from "./db/sqlite.js";
+import { startScheduler, stopScheduler } from "./scheduler.js";
 
 const PORT = parseInt(process.env.PORT ?? "37556", 10);
 
@@ -93,18 +94,21 @@ async function main() {
 
   serve(
     { fetch: app.fetch, port: PORT },
-    (info) => {
+    async (info) => {
       pinoLogger.info({ port: info.port }, "Cubehall server listening");
+      await startScheduler();
     },
   );
 
   // Graceful shutdown
   process.on("SIGINT", () => {
     pinoLogger.info("Shutting down...");
+    stopScheduler();
     close();
     process.exit(0);
   });
   process.on("SIGTERM", () => {
+    stopScheduler();
     close();
     process.exit(0);
   });

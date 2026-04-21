@@ -1,15 +1,16 @@
 /**
- * RSVP programs — advanced state machine with even-pairing.
+ * RSVP programs — advanced state machine with even-pairing + grace period.
  *
  * States: pending → confirmed → locked → attended/no_show
  *
  * When total active RSVPs is odd: new RSVP goes to "pending" (withdrawable).
  * When total becomes even: both the new person and the previously-pending
- * person become "confirmed". A 30-min lock timer starts. After 30 min they
- * become "locked" (cannot withdraw). Confirmation emails sent.
+ * person become "confirmed". A 30-min grace timer starts per person.
  *
- * Withdrawals blocked after Wednesday.
- * RSVPs accepted through Friday 12:00.
+ * During grace (confirmed): can withdraw.  Partner gets demoted to pending.
+ * After grace: scheduler runs matching → locks them → sends email.
+ * After lock: cannot withdraw.
+ *
  * No-show: 2 in 60 days → 90-day RSVP ban.
  */
 
@@ -26,6 +27,7 @@ import { EventBus } from "../capabilities/event-bus.js";
 import { Audit } from "../capabilities/audit.js";
 import { FridayRepo, RsvpRepo, UserRepo } from "../repos/types.js";
 import type { RepoError } from "../repos/types.js";
+import { scheduleGraceLock, cancelGraceLock } from "../scheduler.js";
 
 // ---------------------------------------------------------------------------
 // Errors
@@ -110,13 +112,16 @@ export const rsvpIn = (input: { fridayId: string; userId: string; covered?: bool
     // Determine initial state
     const initialState: RsvpState = willBeEven ? "confirmed" : "pending";
 
+    let newRsvpId: string;
     if (existing) {
       // Re-RSVP
+      newRsvpId = existing.id as string;
       yield* rsvpRepo.updateState(existing.id, initialState, now);
       yield* logger.info("RSVP re-activated", { fridayId: input.fridayId, userId: input.userId, state: initialState });
     } else {
       // New RSVP
       const rsvpId = unsafeRsvpId(yield* rng.uuid());
+      newRsvpId = rsvpId as string;
       const rsvp: Rsvp = {
         id: rsvpId,
         fridayId,
@@ -141,18 +146,18 @@ export const rsvpIn = (input: { fridayId: string; userId: string; covered?: bool
       });
     }
 
-    // If count is now even: confirm the previously-pending person too
+    // If count is now even: confirm the previously-pending person too + schedule grace timers
     if (willBeEven) {
       const pendingRsvp = allRsvps.find(r => r.state === "pending");
       if (pendingRsvp) {
         yield* rsvpRepo.updateState(pendingRsvp.id, "confirmed" as RsvpState, now);
         yield* logger.info("Paired RSVP confirmed", { userId: pendingRsvp.userId });
-        // Send confirmation email to the paired partner
-        yield* sendConfirmationEmail(pendingRsvp.userId as string, input.fridayId);
+        // Schedule grace timer for the partner
+        scheduleGraceLock(pendingRsvp.id as string, input.fridayId);
       }
 
-      // Send confirmation email to the person who just RSVP'd
-      yield* sendConfirmationEmail(input.userId, input.fridayId);
+      // Schedule grace timer for the new person
+      scheduleGraceLock(newRsvpId, input.fridayId);
 
       // Notify coordinators about covered RSVPs if applicable
       if (input.covered) {
@@ -169,53 +174,6 @@ export const rsvpIn = (input: { fridayId: string; userId: string; covered?: bool
       after: initialState,
     });
     yield* eventBus.publish({ kind: "rsvp.created", fridayId, userId });
-
-    // Try to lock any confirmed RSVPs that are past the grace period
-    // (runs on every RSVP action as a lightweight check)
-    yield* Effect.tryPromise({
-      try: async () => {
-        const { getDb, query: dbq, run: dbr, persist: dbp } = await import("../db/sqlite.js");
-        const db = await getDb();
-        const lockDelay = process.env.TEST_MODE === "true" ? 60 * 1000 : 30 * 60 * 1000;
-        const cutoff = new Date(Date.now() - lockDelay).toISOString();
-        const toLock = dbq<{ id: string; user_id: string }>(db,
-          "SELECT id, user_id FROM rsvps WHERE friday_id = ? AND state = 'confirmed' AND last_transition_at <= ?",
-          [fridayId, cutoff]);
-        for (const r of toLock) {
-          dbr(db, "UPDATE rsvps SET state = 'locked' WHERE id = ?", [r.id]);
-          // Send lock email
-          try {
-            const { sendMagicLinkEmail: _ } = await import("../email/sendgrid.js");
-            // Reuse the confirmation email helper (runs outside Effect)
-            const user = dbq<{ email: string; display_name: string }>(db, "SELECT email, display_name FROM users WHERE id = ?", [r.user_id]);
-            const fri = dbq<{ date: string }>(db, "SELECT date FROM fridays WHERE id = ?", [fridayId]);
-            const rsvpRow = dbq<{ created_at: string }>(db, "SELECT created_at FROM rsvps WHERE id = ?", [r.id]);
-            if (user[0] && fri[0]) {
-              const SENDGRID_API_KEY = process.env.SENDGRID_API_KEY ?? "";
-              const FROM_EMAIL = process.env.FROM_EMAIL ?? "noreply@cube.london";
-              const APP_URL = process.env.APP_URL ?? "https://north.cube.london";
-              const rsvpTime = rsvpRow[0]?.created_at
-                ? new Date(rsvpRow[0].created_at).toLocaleString("en-GB", { timeZone: "Europe/London", dateStyle: "medium", timeStyle: "short" })
-                : "earlier";
-              const testPrefix = process.env.TEST_MODE === "true" ? "[TEST] " : "";
-              const toEmail = process.env.TEST_MODE === "true" ? "jm@memorici.de" : user[0].email;
-              await fetch("https://api.sendgrid.com/v3/mail/send", {
-                method: "POST",
-                headers: { Authorization: `Bearer ${SENDGRID_API_KEY}`, "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  personalizations: [{ to: [{ email: toEmail }] }],
-                  from: { email: FROM_EMAIL, name: "North London Cube Community" },
-                  subject: `${testPrefix}You're locked in for ${fri[0].date}`,
-                  content: [{ type: "text/plain", value: `Hi ${user[0].display_name},\n\nYou're locked in for Friday ${fri[0].date} at Owl & Hitchhiker.\n\nRSVP'd at: ${rsvpTime}\nDoors: 18:30\nP1P1: 18:45\n\nThis is a commitment to attend. See you there!\n\n${APP_URL}\n\n— Cubehall` }],
-                }),
-              });
-            }
-          } catch {}
-        }
-        if (toLock.length > 0) dbp();
-      },
-      catch: () => undefined as never,
-    });
 
     return { state: initialState, paired: willBeEven };
   });
@@ -246,21 +204,17 @@ export const rsvpOut = (input: { fridayId: string; userId: string }) =>
       return yield* Effect.fail<RsvpError>({ kind: "not_rsvpd" });
     }
 
-    // Block withdrawal if confirmed or locked — email was sent, you're committed
-    if (existing.state === "confirmed" || existing.state === "locked") {
+    // Locked = committed. Cannot withdraw.
+    if (existing.state === "locked" || existing.state === "seated") {
       return yield* Effect.fail<RsvpError>({
         kind: "withdrawal_blocked",
-        reason: "You're confirmed and locked in. A confirmation email was sent — you committed to attending.",
+        reason: "You're locked in — this is a commitment to attend.",
       });
     }
 
-    // Only pending RSVPs can be withdrawn
-    if (existing.state !== "pending") {
-      return yield* Effect.fail<RsvpError>({
-        kind: "withdrawal_blocked",
-        reason: "Your RSVP cannot be withdrawn in this state.",
-      });
-    }
+    // Pending and confirmed can withdraw.
+    // Cancel grace timer for the withdrawing person.
+    cancelGraceLock(existing.id as string);
 
     const nowISO = yield* clock.now();
     yield* rsvpRepo.updateState(existing.id, "cancelled_by_user" as RsvpState, nowISO);
@@ -276,6 +230,7 @@ export const rsvpOut = (input: { fridayId: string; userId: string }) =>
         .filter(r => r.state === "confirmed")
         .sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
       if (lastConfirmed) {
+        cancelGraceLock(lastConfirmed.id as string);
         yield* rsvpRepo.updateState(lastConfirmed.id, "pending" as RsvpState, nowISO);
         yield* logger.info("Demoted to pending (partner withdrew)", { userId: lastConfirmed.userId });
       }
@@ -295,90 +250,8 @@ export const rsvpOut = (input: { fridayId: string; userId: string }) =>
   });
 
 // ---------------------------------------------------------------------------
-// Lock confirmed RSVPs (call periodically or on a timer)
-// ---------------------------------------------------------------------------
-
-export const lockConfirmedRsvps = (fridayId: string) =>
-  Effect.gen(function* () {
-    const logger = yield* Logger;
-    const rsvpRepo = yield* RsvpRepo;
-    const clock = yield* Clock;
-
-    const fid = unsafeFridayId(fridayId);
-    const now = yield* clock.now();
-    const allRsvps = yield* rsvpRepo.findByFriday(fid);
-
-    let locked = 0;
-    for (const rsvp of allRsvps) {
-      if (rsvp.state === "confirmed") {
-        // Check if 30 minutes have passed since confirmation
-        const confirmedAt = new Date(rsvp.lastTransitionAt).getTime();
-        const lockDelay = process.env.TEST_MODE === "true" ? 60 * 1000 : 30 * 60 * 1000;
-        if (Date.now() - confirmedAt >= lockDelay) {
-          yield* rsvpRepo.updateState(rsvp.id, "locked" as RsvpState, now);
-          // NOW send the confirmation email — they're truly locked in
-          yield* sendConfirmationEmail(rsvp.userId as string, fridayId);
-          locked++;
-        }
-      }
-    }
-
-    if (locked > 0) {
-      yield* logger.info("Locked confirmed RSVPs and sent emails", { fridayId, count: locked });
-    }
-    return { locked };
-  });
-
-// ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-
-function sendConfirmationEmail(userId: string, fridayId: string) {
-  return Effect.tryPromise({
-    try: async () => {
-      const SENDGRID_API_KEY = process.env.SENDGRID_API_KEY ?? "";
-      const FROM_EMAIL = process.env.FROM_EMAIL ?? "noreply@cube.london";
-      const APP_URL = process.env.APP_URL ?? "https://north.cube.london";
-      if (!SENDGRID_API_KEY) return;
-
-      const { getDb, query } = await import("../db/sqlite.js");
-      const db = await getDb();
-      const user = query<{ email: string; display_name: string }>(db,
-        "SELECT email, display_name FROM users WHERE id = ?", [userId]);
-      const friday = query<{ date: string }>(db,
-        "SELECT date FROM fridays WHERE id = ?", [fridayId]);
-      const rsvp = query<{ created_at: string }>(db,
-        "SELECT created_at FROM rsvps WHERE friday_id = ? AND user_id = ?", [fridayId, userId]);
-      if (!user[0] || !friday[0]) return;
-
-      const rsvpTime = rsvp[0]?.created_at
-        ? new Date(rsvp[0].created_at).toLocaleString("en-GB", { timeZone: "Europe/London", dateStyle: "medium", timeStyle: "short" })
-        : "just now";
-      const testPrefix = process.env.TEST_MODE === "true" ? "[TEST] " : "";
-
-      await fetch("https://api.sendgrid.com/v3/mail/send", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${SENDGRID_API_KEY}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          personalizations: [{ to: [{ email: process.env.TEST_MODE === "true" ? "jm@memorici.de" : user[0].email }] }],
-          from: { email: FROM_EMAIL, name: "North London Cube Community" },
-          subject: `${testPrefix}You're confirmed for ${friday[0].date}`,
-          content: [{
-            type: "text/plain",
-            value: `Hi ${user[0].display_name},\n\nYou're confirmed for Friday ${friday[0].date} at Owl & Hitchhiker.\n\nRSVP'd at: ${rsvpTime}\nDoors: 18:30\nP1P1: 18:45\n\nYou are locked in — this is a commitment to attend. See you there!\n\n${APP_URL}\n\n— Cubehall`,
-          }],
-        }),
-      });
-    },
-    catch: (e) => {
-      console.error("Failed to send confirmation email:", e);
-      return undefined as never;
-    },
-  });
-}
 
 function notifyCoordinatorsCovered(fridayId: string) {
   return Effect.tryPromise({

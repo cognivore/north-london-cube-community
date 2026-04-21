@@ -172,12 +172,12 @@ export default function FridayDetail() {
               const player = (data as any).players?.[r.userId];
               const name = player?.displayName ?? r.userId.slice(0, 8);
               const isMe = r.userId === currentUser?.id;
-              const stateLabel = r.state === "pending" ? "pending" : r.state === "confirmed" || r.state === "locked" ? "confirmed" : "";
+              const stateLabel = r.state === "pending" ? "pending" : r.state === "confirmed" ? "confirmed" : r.state === "locked" ? "locked in" : "";
               return (
                 <li key={r.id} className="flex items-center gap-2 text-sm">
                   <span className={isMe ? "font-bold text-amber" : "text-ink-soft"}>{isMe ? "You" : name}</span>
                   {stateLabel && (
-                    <span className={`text-xs mono ${r.state === "pending" ? "text-amber" : "text-ok"}`} data-mono>
+                    <span className={`text-xs mono ${r.state === "pending" ? "text-amber" : r.state === "confirmed" ? "text-amber" : "text-ok"}`} data-mono>
                       {stateLabel}
                     </span>
                   )}
@@ -219,12 +219,23 @@ export default function FridayDetail() {
                     type="submit"
                     className="rounded-sm bg-paper border border-rule-heavy px-4 py-3 text-sm font-medium text-ink-soft hover:bg-paper-alt min-h-[44px]"
                   >
-                    Withdraw (while pending)
+                    Withdraw
                   </button>
                 </Form>
               </div>
             ) : myRsvp?.state === "confirmed" ? (
-              <p className="text-sm text-ok font-medium">You're confirmed! You'll be fully locked in after 30 minutes.</p>
+              <div className="space-y-2">
+                <p className="text-sm text-amber font-medium">You're paired up! You have 30 minutes to change your mind.</p>
+                <Form method="post">
+                  <input type="hidden" name="intent" value="rsvp-out" />
+                  <button
+                    type="submit"
+                    className="rounded-sm bg-paper border border-rule-heavy px-4 py-3 text-sm font-medium text-ink-soft hover:bg-paper-alt min-h-[44px]"
+                  >
+                    Withdraw (grace period)
+                  </button>
+                </Form>
+              </div>
             ) : (
               <p className="text-sm text-ok font-medium">You're locked in. See you there!</p>
             )}
