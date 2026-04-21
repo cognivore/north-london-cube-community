@@ -1,0 +1,6 @@
+- /packages/server/data/
+- /packages/server/backups/
+- node_modules/
+- .git/
+- .env
+- .env.*
