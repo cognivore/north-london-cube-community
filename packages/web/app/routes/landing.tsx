@@ -28,42 +28,51 @@ export const meta: MetaFunction = () => [
 export default function Landing() {
   return (
     <div className="min-h-dvh flex flex-col bg-paper text-ink">
-      {/* Hero */}
-      <header className="flex-1 flex flex-col items-center justify-center px-4 text-center">
+      {/* Site identity bar */}
+      <nav className="flex items-center justify-center gap-2.5 px-4 pt-6 pb-2">
         <img
           src="/hero.webp"
-          alt="Cubehall"
-          width={167}
-          height={128}
+          alt=""
+          width={28}
+          height={22}
           style={{ imageRendering: "pixelated" }}
         />
-        <h1 className="mt-6 text-5xl font-semibold tracking-tight text-ink">
-          North London<br />
-          <span className="text-amber">Cube Community</span>
+        <span className="text-sm font-medium tracking-wide text-ink-faint uppercase">
+          North London Cube Community
+        </span>
+      </nav>
+
+      {/* Hero */}
+      <header className="flex flex-col items-center px-4 pt-10 sm:pt-16 pb-12 text-center">
+        <h1 className="text-3xl sm:text-5xl font-bold tracking-tight text-ink">
+          Friday night<br />
+          <span className="text-amber">cube drafts</span>
         </h1>
-        <p className="mt-6 max-w-md text-lg text-ink-soft">
-          Every Friday. Same time. Same place.<br />
-          Bring a cube or just show up and draft.
+
+        <p className="mt-5 max-w-sm text-lg text-ink-soft">
+          RSVP, cube selection, pods and pairings &mdash; all run through this site.
         </p>
 
-        <div className="mt-8 flex gap-4">
-          <Link
-            to="/login"
-            accessKey="s"
-            className="rounded-sm border border-amber bg-amber-soft px-6 py-3 text-lg font-semibold text-ink"
-          >
-            <span className="inline-flex items-center gap-2">
-              <Icon name="door_in" />
-              Sign in <span className="mono text-ink-faint text-sm">&crarr;</span>
-            </span>
-          </Link>
+        <div className="mt-8 w-full max-w-xs space-y-3">
           <Link
             to="/register"
-            className="rounded-sm border border-rule-heavy bg-paper px-6 py-3 text-lg font-semibold text-ink"
+            className="block w-full rounded-sm bg-amber border border-amber py-3.5 text-center text-lg font-bold text-white min-h-[48px]"
           >
-            Register
+            Register to play
           </Link>
+          <p className="text-sm text-ink-faint">
+            Already have an account?{" "}
+            <Link to="/login" className="text-dci-teal underline">Sign in</Link>
+          </p>
         </div>
+
+        <p className="mt-8 text-sm text-ink-faint">
+          18:45 every Friday at{" "}
+          <a href="https://www.owlandhitchhiker.pub/" className="text-dci-teal underline" rel="noopener noreferrer">
+            Owl & Hitchhiker
+          </a>
+          , Archway N7
+        </p>
       </header>
 
       {/* What this is */}
