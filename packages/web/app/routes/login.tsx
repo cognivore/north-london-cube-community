@@ -1,5 +1,11 @@
-import { Form, Link, useActionData } from "react-router";
-import { api } from "../lib/api";
+import { Form, Link, useActionData, redirect } from "react-router";
+import { api, cookieHeader } from "../lib/api";
+
+export async function loader({ request }: { request: Request }) {
+  const result = await api.me({ headers: cookieHeader(request) });
+  if (result.ok) return redirect("/app");
+  return null;
+}
 
 export async function action({ request }: { request: Request }) {
   const formData = await request.formData();

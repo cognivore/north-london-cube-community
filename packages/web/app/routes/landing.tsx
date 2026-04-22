@@ -1,7 +1,14 @@
 import type { MetaFunction } from "react-router";
-import { Link } from "react-router";
+import { Link, redirect } from "react-router";
 import { Icon } from "../components/Icon";
 import type { SilkIcon } from "../components/Icon";
+import { api, cookieHeader } from "../lib/api";
+
+export async function loader({ request }: { request: Request }) {
+  const result = await api.me({ headers: cookieHeader(request) });
+  if (result.ok) return redirect("/app");
+  return null;
+}
 
 export const meta: MetaFunction = () => [
   { title: "North London Cube Community" },
