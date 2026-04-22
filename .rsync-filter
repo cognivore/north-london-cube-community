@@ -1,7 +1,11 @@
-P /packages/server/data/
-P /packages/server/backups/
-- /packages/server/data/
-- /packages/server/backups/
+P data/
+P backups/
+P packages/server/data/
+P packages/server/backups/
+- data/
+- backups/
+- packages/server/data/
+- packages/server/backups/
 - node_modules/
 - .git/
 - .env
