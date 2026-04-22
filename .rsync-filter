@@ -1,3 +1,5 @@
+P /packages/server/data/
+P /packages/server/backups/
 - /packages/server/data/
 - /packages/server/backups/
 - node_modules/
