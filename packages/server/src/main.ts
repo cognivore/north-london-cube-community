@@ -96,7 +96,7 @@ async function main() {
     { fetch: app.fetch, port: PORT },
     async (info) => {
       pinoLogger.info({ port: info.port }, "Cubehall server listening");
-      await startScheduler();
+      await startScheduler(runEffect);
     },
   );
 

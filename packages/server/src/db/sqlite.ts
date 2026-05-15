@@ -178,6 +178,12 @@ const SCHEMA = `
     sent_at TEXT NOT NULL
   );
 
+  CREATE TABLE IF NOT EXISTS settings (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  );
+
   CREATE INDEX IF NOT EXISTS idx_rsvps_friday ON rsvps(friday_id);
   CREATE INDEX IF NOT EXISTS idx_enrollments_friday ON enrollments(friday_id);
   CREATE INDEX IF NOT EXISTS idx_pods_friday ON pods(friday_id);

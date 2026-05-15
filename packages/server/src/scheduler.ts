@@ -7,11 +7,19 @@
  *
  * Cron emails (London time):
  *   - Cube announcement: when Friday reaches "locked"/"confirmed" state
+ *   - Wednesday 09:00: midweek heads-up to locked-in players for the upcoming Friday
+ *   - Wednesday 09:00–09:30: auto-promote Friday open → locked so cube announcement can fire
  *   - Friday 09:00: morning reminder (locked = cube info, pending = find a +1)
  *   - Friday 16:30: "get out of the office" reminder to locked-in players
  */
 
+import type { Effect } from "effect";
 import { getDb, query, run as dbRun, persist } from "./db/sqlite.js";
+import { advanceFriday } from "./programs/friday-lifecycle.js";
+import { renderEmail } from "./email-templates.js";
+
+export type RunEffect = <A, E>(effect: Effect.Effect<A, E, any>) => Promise<A>;
+let _runEffect: RunEffect | null = null;
 
 // ---------------------------------------------------------------------------
 // Config
@@ -89,7 +97,7 @@ export async function runMatching(fridayId: string) {
 // Emails
 // ---------------------------------------------------------------------------
 
-async function sendEmail(to: string, subject: string, body: string) {
+export async function sendEmail(to: string, subject: string, body: string) {
   const key = sendgridKey();
   if (!key) return;
   await fetch("https://api.sendgrid.com/v3/mail/send", {
@@ -133,9 +141,14 @@ async function sendLockEmail(userId: string, fridayId: string) {
     ? new Date(rsvpRow[0].created_at).toLocaleString("en-GB", { timeZone: "Europe/London", dateStyle: "medium", timeStyle: "short" })
     : "earlier";
 
-  await sendEmail(user[0].email,
-    `You're locked in for ${fri[0].date}`,
-    `Hi ${user[0].display_name},\n\nYou're locked in for Friday ${fri[0].date} at Owl & Hitchhiker.\n\nRSVP'd at: ${rsvpTime}\nDoors: 18:30\nP1P1: 18:45\n\nThis is a commitment to attend. See you there!\n\n${appUrl()}\n\n— Cubehall`);
+  const e = renderEmail("lock", {
+    displayName: user[0].display_name,
+    date: fri[0].date,
+    cubeNames: "",
+    appUrl: appUrl(),
+    rsvpTime,
+  });
+  await sendEmail(user[0].email, e.subject, e.body);
 }
 
 // ---------------------------------------------------------------------------
@@ -177,9 +190,101 @@ async function checkCubeAnnouncements() {
       [fri.id]);
 
     for (const a of attendees) {
-      await sendEmail(a.email,
-        `Cubes for ${fri.date}`,
-        `Hi ${a.display_name},\n\nThe cubes for Friday ${fri.date} have been decided:\n\n${cubeList}\n\nDoors: 18:30 | P1P1: 18:45\n\n${appUrl()}\n\n— Cubehall`);
+      const e = renderEmail("cube_announcement", {
+        displayName: a.display_name,
+        date: fri.date,
+        cubeNames: cubeList,
+        appUrl: appUrl(),
+      });
+      await sendEmail(a.email, e.subject, e.body);
+    }
+  }
+}
+
+/**
+ * Wednesday 09:00–09:30 London — auto-promote open Friday to locked so the
+ * cube announcement email can fire. Walks `advanceFriday` until state leaves
+ * {open, vote_open, vote_closed}; stops on no-progress. Capped iterations.
+ */
+async function checkFridayAutoPromote() {
+  if (!_runEffect) return;
+  const londonHour = getLondonHour();
+  const londonMinute = getLondonMinute();
+  if (londonHour !== 9 || londonMinute > 30) return;
+
+  const db = await getDb();
+  const fridayDate = addDays(getLondonDate(), 2);
+  const fridays = query<{ id: string; kind: string }>(db,
+    `SELECT id, json_extract(state, '$.kind') AS kind FROM fridays WHERE date = ?`,
+    [fridayDate]);
+
+  const advancing: ReadonlySet<string> = new Set(["open", "vote_open", "vote_closed"]);
+
+  for (const fri of fridays) {
+    let kind = fri.kind;
+    for (let safety = 0; safety < 5; safety++) {
+      if (!advancing.has(kind)) break;
+      try {
+        await _runEffect(advanceFriday(fri.id));
+      } catch (e) {
+        console.error("Friday auto-promote failed:", { fridayId: fri.id, kind, e });
+        break;
+      }
+      const re = query<{ kind: string }>(db,
+        `SELECT json_extract(state, '$.kind') AS kind FROM fridays WHERE id = ?`,
+        [fri.id]);
+      const newKind = re[0]?.kind ?? kind;
+      if (newKind === kind) break;
+      kind = newKind;
+    }
+  }
+}
+
+/** Wednesday 09:00 London — midweek heads-up to locked-in players for the upcoming Friday. */
+export async function checkWednesdayReminder() {
+  const londonHour = getLondonHour();
+  const londonMinute = getLondonMinute();
+  if (londonHour !== 9 || londonMinute > 5) return;
+
+  const db = await getDb();
+  const fridayDate = addDays(getLondonDate(), 2);
+
+  const fridays = query<{ id: string; date: string }>(db,
+    "SELECT id, date FROM fridays WHERE date = ?", [fridayDate]);
+
+  for (const fri of fridays) {
+    const sentKey = `wednesday:${fri.id}`;
+    if (await alreadySent(sentKey, fri.id, "wednesday")) continue;
+
+    const pods = query<{ cube_id: string }>(db,
+      "SELECT cube_id FROM pods WHERE friday_id = ?", [fri.id]);
+    const cubeIds = pods.map(p => p.cube_id);
+    let cubeNames = "TBD";
+    if (cubeIds.length > 0) {
+      const cubes = query<{ name: string }>(db,
+        `SELECT name FROM cubes WHERE id IN (${cubeIds.map(() => "?").join(",")})`, cubeIds);
+      cubeNames = cubes.map(c => c.name).join(", ");
+    } else {
+      const enrolls = query<{ name: string }>(db,
+        `SELECT c.name FROM enrollments e JOIN cubes c ON c.id = e.cube_id
+         WHERE e.friday_id = ? AND e.withdrawn = 0`, [fri.id]);
+      if (enrolls.length > 0) cubeNames = enrolls.map(e => e.name).join(", ");
+    }
+
+    const locked = query<{ email: string; display_name: string }>(db,
+      `SELECT u.email, u.display_name FROM rsvps r
+       JOIN users u ON u.id = r.user_id
+       WHERE r.friday_id = ? AND r.state IN ('locked', 'seated')`,
+      [fri.id]);
+
+    for (const a of locked) {
+      const e = renderEmail("wednesday", {
+        displayName: a.display_name,
+        date: fri.date,
+        cubeNames,
+        appUrl: appUrl(),
+      });
+      await sendEmail(a.email, e.subject, e.body);
     }
   }
 }
@@ -216,9 +321,13 @@ async function checkMorningReminder() {
         [fri.id]);
 
       for (const a of locked) {
-        await sendEmail(a.email,
-          `Tonight: ${cubeNames}`,
-          `Hi ${a.display_name},\n\nReminder: you're playing tonight!\n\nCubes: ${cubeNames}\nDoors: 18:30 | P1P1: 18:45\nOWL & Hitchhiker\n\nSee you there!\n\n${appUrl()}\n\n— Cubehall`);
+        const e = renderEmail("morning_locked", {
+          displayName: a.display_name,
+          date: fri.date,
+          cubeNames,
+          appUrl: appUrl(),
+        });
+        await sendEmail(a.email, e.subject, e.body);
       }
     }
 
@@ -232,9 +341,13 @@ async function checkMorningReminder() {
         [fri.id]);
 
       for (const a of pending) {
-        await sendEmail(a.email,
-          `Find a +1 for tonight!`,
-          `Hi ${a.display_name},\n\nYou're on the waitlist for tonight's cube draft. RSVPs work in pairs — if you can find a friend to register and RSVP, you'll both be paired up and locked in!\n\nShare this link: ${appUrl()}/register\n\nDoors: 18:30 | P1P1: 18:45\nOWL & Hitchhiker\n\n${appUrl()}\n\n— Cubehall`);
+        const e = renderEmail("morning_pending", {
+          displayName: a.display_name,
+          date: fri.date,
+          cubeNames: "",
+          appUrl: appUrl(),
+        });
+        await sendEmail(a.email, e.subject, e.body);
       }
     }
   }
@@ -263,9 +376,13 @@ async function checkAfternoonReminder() {
       [fri.id]);
 
     for (const a of locked) {
-      await sendEmail(a.email,
-        `Get out of the office!`,
-        `Hi ${a.display_name},\n\nLeave by 17:00 to catch the game tonight!\n\nP1P1 is at 18:45 — doors open 18:30 at Owl & Hitchhiker.\n\nSee you soon!\n\n${appUrl()}\n\n— Cubehall`);
+      const e = renderEmail("afternoon", {
+        displayName: a.display_name,
+        date: fri.date,
+        cubeNames: "",
+        appUrl: appUrl(),
+      });
+      await sendEmail(a.email, e.subject, e.body);
     }
   }
 }
@@ -288,6 +405,11 @@ function getLondonDate(): string {
 function getLondonDayOfWeek(): number {
   return new Date(new Date().toLocaleString("en-US", { timeZone: "Europe/London" })).getDay();
 }
+function addDays(yyyymmdd: string, n: number): string {
+  const d = new Date(`${yyyymmdd}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + n);
+  return d.toISOString().slice(0, 10);
+}
 
 // ---------------------------------------------------------------------------
 // Periodic tick + recovery
@@ -296,6 +418,26 @@ function getLondonDayOfWeek(): number {
 let cronInterval: NodeJS.Timeout | null = null;
 
 async function tick() {
+  // 0. If odd-events are allowed, sweep up any orphaned pending RSVPs and
+  //    promote them to confirmed so they enter the normal grace flow.
+  //    Catches RSVPs created before the toggle was flipped on.
+  try {
+    const { getBoolSetting, SETTING_ODD_EVENTS_ALLOWED } = await import("./settings.js");
+    if (await getBoolSetting(SETTING_ODD_EVENTS_ALLOWED)) {
+      const db = await getDb();
+      const now = new Date().toISOString();
+      const pending = query<{ id: string; friday_id: string }>(db,
+        "SELECT id, friday_id FROM rsvps WHERE state = 'pending'");
+      for (const r of pending) {
+        dbRun(db,
+          "UPDATE rsvps SET state = 'confirmed', last_transition_at = ? WHERE id = ? AND state = 'pending'",
+          [now, r.id]);
+        scheduleGraceLock(r.id, r.friday_id);
+      }
+      if (pending.length > 0) persist();
+    }
+  } catch (e) { console.error("Pending-sweep failed:", e); }
+
   // 1. Check for confirmed RSVPs past grace → run matching per friday
   try {
     const db = await getDb();
@@ -313,8 +455,13 @@ async function tick() {
   // 2. Cron emails
   try { await checkCubeAnnouncements(); } catch (e) { console.error("Cube announcement check failed:", e); }
 
-  // Only run time-based reminders on Fridays (day 5)
-  if (getLondonDayOfWeek() === 5) {
+  // Day-of-week-gated reminders
+  const dow = getLondonDayOfWeek();
+  if (dow === 3) {
+    try { await checkWednesdayReminder(); } catch (e) { console.error("Wednesday reminder failed:", e); }
+    try { await checkFridayAutoPromote(); } catch (e) { console.error("Friday auto-promote check failed:", e); }
+  }
+  if (dow === 5) {
     try { await checkMorningReminder(); } catch (e) { console.error("Morning reminder failed:", e); }
     try { await checkAfternoonReminder(); } catch (e) { console.error("Afternoon reminder failed:", e); }
   }
@@ -340,7 +487,8 @@ async function recoverGraceTimers() {
   }
 }
 
-export async function startScheduler() {
+export async function startScheduler(runEffect?: RunEffect) {
+  if (runEffect) _runEffect = runEffect;
   await recoverGraceTimers();
 
   // Run immediately, then every 60s

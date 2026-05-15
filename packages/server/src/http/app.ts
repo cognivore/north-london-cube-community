@@ -12,6 +12,7 @@ import { fridays } from "./routes/fridays.js";
 import { cubes } from "./routes/cubes.js";
 import { pods } from "./routes/pods.js";
 import { me } from "./routes/me.js";
+import { users } from "./routes/users.js";
 import { venues } from "./routes/venues.js";
 import { admin } from "./routes/admin.js";
 import { lifecycle } from "./routes/lifecycle.js";
@@ -45,6 +46,7 @@ export function createApp(
   app.route("/api/cubes", cubes);
   app.route("/api/pods", pods);
   app.route("/api/me", me);
+  app.route("/api/users", users);
   app.route("/api/venues", venues);
   app.route("/api/admin", admin);
   app.route("/api/lifecycle", lifecycle);

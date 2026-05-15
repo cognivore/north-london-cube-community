@@ -69,7 +69,7 @@ export async function sendMagicLinkEmail(
   </p>
 ${cocHtml}
   <p style="color: #525252; font-size: 12px; margin-top: 40px; border-top: 1px solid #262626; padding-top: 16px;">
-    <a href="https://www.owlandhitchhiker.pub/" style="color: #f59e0b; text-decoration: underline;">Owl &amp; Hitchhiker</a>, 471 Holloway Rd, Archway N7 &middot; Doors 18:30 &middot; P1P1 18:45
+    <a href="https://maps.app.goo.gl/ae9BhBH59TWZ5uu99" style="color: #f59e0b; text-decoration: underline;">Owl &amp; Hitchhiker</a>, 471 Holloway Rd, Archway N7 &middot; Doors 18:30 &middot; P1P1 18:45
   </p>
 </body>
 </html>`,

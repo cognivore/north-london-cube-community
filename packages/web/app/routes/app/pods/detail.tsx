@@ -37,7 +37,10 @@ export async function action({ request, params }: { request: Request; params: { 
       method: "POST",
       headers: { "Content-Type": "application/json", ...ch },
     });
-    if (!res.ok) return { error: "Failed to start round" };
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      return { error: body?.error?.message ?? `Failed to start round (${res.status})` };
+    }
     return { success: `Round ${roundNumber} started — pairings generated!` };
   }
 
@@ -102,6 +105,15 @@ export default function PodDetail() {
         <div className="rounded-sm border border-dci-teal bg-dci-teal-soft p-4 space-y-2">
           <h3 className="text-sm font-semibold text-ink">Pod controls</h3>
 
+          {isCoordinator && (pod.state === "drafting" || pod.state === "building") && !currentRound && (
+            <Link
+              to={`/admin/fridays/${pod.fridayId}/pods`}
+              className="inline-block rounded-sm border border-amber bg-paper px-3 py-1.5 text-xs font-semibold text-amber hover:bg-paper-alt"
+            >
+              ← Edit seats
+            </Link>
+          )}
+
           {!currentRound && nextPendingRound && (
             <Form method="post">
               <input type="hidden" name="intent" value="start-round" />
@@ -148,7 +160,7 @@ export default function PodDetail() {
                     </span>
                   )}
                 </div>
-                <p className="font-medium text-ink">{name}</p>
+                <Link to={`/app/users/${s.userId}`} className="font-medium text-ink hover:underline">{name}</Link>
                 {dci != null && (
                   <div className="mt-0.5 flex items-center gap-1">
                     <img src="/icons/dci-16.png" width={16} height={16} alt="DCI" />
@@ -216,7 +228,11 @@ export default function PodDetail() {
                 return (
                   <tr key={s.userId ?? i} className="border-b border-rule last:border-0">
                     <td className="py-1.5 pr-2 mono text-ink-faint" data-mono>{s.rank}</td>
-                    <td className="py-1.5 pr-2 font-medium text-ink">{name}</td>
+                    <td className="py-1.5 pr-2 font-medium text-ink">
+                      {s.userId
+                        ? <Link to={`/app/users/${s.userId}`} className="hover:underline">{name}</Link>
+                        : name}
+                    </td>
                     <td className="py-1.5 pr-2 text-right mono font-bold text-ink" data-mono>{s.matchPoints}</td>
                     <td className="py-1.5 pr-2 text-right mono text-ink-faint" data-mono>
                       {(s.omwPercent * 100).toFixed(1)}%

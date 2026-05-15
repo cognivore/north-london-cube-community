@@ -1,5 +1,6 @@
 import { Form, useLoaderData, useActionData, Link } from "react-router";
 import { api, cookieHeader, SERVER_API_BASE } from "../../../lib/api";
+import { VenueCard } from "../../../components/venue-card";
 
 export async function loader({ request, params }: { request: Request; params: { fridayId: string } }) {
   const ch = { headers: cookieHeader(request) };
@@ -82,7 +83,10 @@ export async function action({ request, params }: { request: Request; params: { 
       method: "POST",
       headers: { "Content-Type": "application/json", ...cookieHeader(request) },
     });
-    if (!res.ok) return { error: "Advance failed" };
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      return { error: body?.error?.message ?? `Advance failed (${res.status})` };
+    }
     return { success: "Friday advanced!" };
   }
 
@@ -154,6 +158,9 @@ export default function FridayDetail() {
         </div>
       )}
 
+      {/* Venue */}
+      <VenueCard variant="compact" />
+
       {/* RSVP */}
       <section className="rounded-sm border border-rule bg-paper-alt p-4">
         <h2 className="text-lg font-semibold text-ink">
@@ -212,7 +219,7 @@ export default function FridayDetail() {
               </div>
             ) : myRsvp?.state === "pending" ? (
               <div className="space-y-2">
-                <p className="text-sm text-amber">Your RSVP is pending — waiting for another player to pair up.</p>
+                <p className="text-sm text-amber">You're in! Currently unpaired — if you can bring a +1, even better, but please come along either way.</p>
                 <Form method="post">
                   <input type="hidden" name="intent" value="rsvp-out" />
                   <button

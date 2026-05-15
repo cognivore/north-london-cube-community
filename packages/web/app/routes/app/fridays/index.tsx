@@ -1,8 +1,8 @@
 import { Link, useLoaderData } from "react-router";
-import { api } from "../../../lib/api";
+import { api, cookieHeader } from "../../../lib/api";
 
-export async function loader() {
-  const result = await api.listFridays();
+export async function loader({ request }: { request: Request }) {
+  const result = await api.listFridays({ headers: cookieHeader(request) });
   return { fridays: result.ok ? result.data.fridays : [] };
 }
 

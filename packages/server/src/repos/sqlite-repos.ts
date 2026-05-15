@@ -544,8 +544,17 @@ const FridayRepoLive = Layer.succeed(FridayRepo, {
       try: async () => {
         const db = await getDb();
         const today = new Date().toISOString().slice(0, 10);
+        // Include any Friday that's either upcoming (date >= today) or still
+        // active (any non-terminal state) regardless of date — so a past-due
+        // Friday that's being recorded/seated/played stays visible in the app
+        // until the coordinator marks it complete or cancelled.
         const rows = query<FridayRow>(db,
-          "SELECT * FROM fridays WHERE date >= ? ORDER BY date ASC", [today]);
+          `SELECT * FROM fridays
+           WHERE date >= ?
+              OR json_extract(state, '$.kind') IN
+                 ('open','enrollment_closed','vote_open','vote_closed',
+                  'locked','confirmed','in_progress')
+           ORDER BY date ASC`, [today]);
         return rows.map(toFriday);
       },
       catch: dbError,
@@ -1331,6 +1340,37 @@ export const seedVenues = Effect.tryPromise({
   catch: dbError,
 });
 
+/** Stable user id used wherever a "no opponent / BYE" pseudo-player is needed. */
+export const BYE_USER_ID = "00000000-0000-0000-0000-000000000bee";
+
+/** Seed the BYE pseudo-user. Used in seats/matches when a no-show is recorded. */
+export const seedByeUser = Effect.tryPromise({
+  try: async () => {
+    const db = await getDb();
+    const existing = query<{ id: string }>(db, "SELECT id FROM users WHERE id = ?", [BYE_USER_ID]);
+    if (existing.length > 0) return;
+
+    const now = new Date().toISOString();
+    const profile = JSON.stringify({
+      preferredFormats: ["swiss_draft"],
+      fallbackFormats: [],
+      hostCapable: false,
+      bio: "",
+      noShowCount: 0,
+      banned: { kind: "not_banned" },
+    });
+    run(db,
+      `INSERT INTO users (id, email, display_name, dci_number, created_at,
+                          auth_state, profile, role)
+       VALUES (?, ?, ?, NULL, ?, ?, ?, 'member')`,
+      [BYE_USER_ID, "bye@cubehall.local", "BYE", now,
+       JSON.stringify({ kind: "verified" }), profile],
+    );
+    persist();
+  },
+  catch: dbError,
+});
+
 /** Seed default invite code "NLCC2026" if it doesn't exist. */
 export const seedInviteCode = Effect.tryPromise({
   try: async () => {
@@ -1354,8 +1394,47 @@ export const seedInviteCode = Effect.tryPromise({
 
 export async function seed(): Promise<void> {
   await Effect.runPromise(seedVenues);
+  await migrateMergeVenues();
+  await Effect.runPromise(seedByeUser);
   await Effect.runPromise(seedInviteCode);
   await seedCoordinator();
+}
+
+/**
+ * Idempotent fixup: the DB historically had two venues ("The Hitchhiker" and
+ * "The Owl") with Palmers Green addresses. There is only one pub — The Owl &
+ * Hitchhiker on Holloway Rd in Archway. This collapses any legacy duplicates
+ * into the canonical venue row and corrects name + address. Safe to run on
+ * every startup.
+ */
+async function migrateMergeVenues(): Promise<void> {
+  const db = await getDb();
+  const PRIMARY_ID = "d0000000-0000-0000-0000-000000000001";
+  const SECONDARY_ID = "d0000000-0000-0000-0000-000000000002";
+  const CORRECT_NAME = "The Owl & Hitchhiker";
+  const CORRECT_ADDRESS = "471 Holloway Rd, Archway, London N7 6LE";
+
+  const venues = query<{ id: string; name: string; address: string }>(db,
+    "SELECT id, name, address FROM venues", []);
+  const primary = venues.find(v => v.id === PRIMARY_ID);
+  const secondary = venues.find(v => v.id === SECONDARY_ID);
+
+  let dirty = false;
+
+  if (secondary) {
+    run(db, "UPDATE fridays SET venue_id = ? WHERE venue_id = ?",
+      [PRIMARY_ID, SECONDARY_ID]);
+    run(db, "DELETE FROM venues WHERE id = ?", [SECONDARY_ID]);
+    dirty = true;
+  }
+
+  if (primary && (primary.name !== CORRECT_NAME || primary.address !== CORRECT_ADDRESS)) {
+    run(db, "UPDATE venues SET name = ?, address = ? WHERE id = ?",
+      [CORRECT_NAME, CORRECT_ADDRESS, PRIMARY_ID]);
+    dirty = true;
+  }
+
+  if (dirty) persist();
 }
 
 async function seedCoordinator(): Promise<void> {

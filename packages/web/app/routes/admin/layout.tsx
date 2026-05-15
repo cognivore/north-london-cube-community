@@ -1,8 +1,8 @@
 import { Outlet, Link, redirect } from "react-router";
-import { api } from "../../lib/api";
+import { api, cookieHeader } from "../../lib/api";
 
-export async function loader() {
-  const result = await api.me();
+export async function loader({ request }: { request: Request }) {
+  const result = await api.me({ headers: cookieHeader(request) });
   if (!result.ok) throw redirect("/login");
   if (result.data.user.role !== "coordinator") throw redirect("/app");
   return { user: result.data.user };
@@ -19,6 +19,12 @@ export default function AdminLayout() {
           <div className="flex items-center gap-4 text-sm">
             <Link to="/admin/audit" className="text-ink-soft underline hover:text-ink">
               Audit
+            </Link>
+            <Link to="/admin/email-test" className="text-ink-soft underline hover:text-ink">
+              Email test
+            </Link>
+            <Link to="/admin/settings" className="text-ink-soft underline hover:text-ink">
+              Settings
             </Link>
             <Link to="/app" className="text-ink-soft underline hover:text-ink">
               Back to app

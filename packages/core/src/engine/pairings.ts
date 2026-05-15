@@ -359,7 +359,8 @@ function generateRoundRobinCrossTeam(
   }
 
   const teamSize = size / 2; // 2 for 2v2, 3 for 3v3
-  const totalRounds = teamSize; // each A plays each B exactly once
+  // 2v2 reserves round 3 for the team-vs-team tiebreaker (single match).
+  const totalRounds = teamSize === 2 ? 3 : teamSize;
 
   if (currentRound < 1 || currentRound > totalRounds) {
     return {
@@ -383,6 +384,9 @@ function generateRoundRobinCrossTeam(
     };
   }
 
+  // 2v2 round 3 reuses the standard formula, which produces A0-B0 / A1-B1 (a
+  // repeat of round 1's pairings). The curator either plays it or leaves the
+  // matches pending — pending matches contribute 0 to standings.
   const roundIndex = currentRound - 1;
   const matches: PlannedMatch[] = [];
 

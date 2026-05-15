@@ -74,9 +74,13 @@ export const rsvpIn = (input: { fridayId: string; userId: string; covered?: bool
       });
     }
 
-    // Check no-show ban: 2+ no-shows in last 60 days → 90-day ban
+    // Check no-show ban: 2+ no-shows in last 60 days → 90-day ban.
+    // Gated by the `noShowEnforcementEnabled` admin setting — defaults off
+    // during cold start so disorganised players don't get locked out.
     yield* Effect.tryPromise({
       try: async () => {
+        const { getBoolSetting, SETTING_NO_SHOW_ENFORCEMENT } = await import("../settings.js");
+        if (!(await getBoolSetting(SETTING_NO_SHOW_ENFORCEMENT))) return;
         const { getDb, query } = await import("../db/sqlite.js");
         const db = await getDb();
         const sixtyDaysAgo = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString();
@@ -109,8 +113,17 @@ export const rsvpIn = (input: { fridayId: string; userId: string; covered?: bool
     // After this RSVP, count will be activeCount + 1
     const willBeEven = (activeCount + 1) % 2 === 0;
 
-    // Determine initial state
-    const initialState: RsvpState = willBeEven ? "confirmed" : "pending";
+    // When `oddEventsAllowed` is on (cold-start default), everyone goes
+    // straight to confirmed — no pairing required. Otherwise behave as
+    // before: odd headcount keeps the newest RSVP "pending" until paired.
+    const oddAllowed = yield* Effect.tryPromise({
+      try: async () => {
+        const { getBoolSetting, SETTING_ODD_EVENTS_ALLOWED } = await import("../settings.js");
+        return await getBoolSetting(SETTING_ODD_EVENTS_ALLOWED);
+      },
+      catch: () => true,
+    });
+    const initialState: RsvpState = (oddAllowed || willBeEven) ? "confirmed" : "pending";
 
     let newRsvpId: string;
     if (existing) {
@@ -146,20 +159,24 @@ export const rsvpIn = (input: { fridayId: string; userId: string; covered?: bool
       });
     }
 
-    // If count is now even: confirm the previously-pending person too + schedule grace timers
+    // If we just paired up an odd headcount (regardless of toggle), promote
+    // the previously-pending person to confirmed too. With odd-allowed on
+    // there shouldn't normally be any pending RSVPs around, but if there
+    // are leftovers from before the toggle was flipped, sweep them up.
     if (willBeEven) {
       const pendingRsvp = allRsvps.find(r => r.state === "pending");
       if (pendingRsvp) {
         yield* rsvpRepo.updateState(pendingRsvp.id, "confirmed" as RsvpState, now);
         yield* logger.info("Paired RSVP confirmed", { userId: pendingRsvp.userId });
-        // Schedule grace timer for the partner
         scheduleGraceLock(pendingRsvp.id as string, input.fridayId);
       }
+    }
 
-      // Schedule grace timer for the new person
+    // Schedule the grace timer for THIS new RSVP whenever it goes to
+    // confirmed — either via pairing OR via the odd-allowed shortcut.
+    if (initialState === "confirmed") {
       scheduleGraceLock(newRsvpId, input.fridayId);
 
-      // Notify coordinators about covered RSVPs if applicable
       if (input.covered) {
         yield* notifyCoordinatorsCovered(input.fridayId);
       }

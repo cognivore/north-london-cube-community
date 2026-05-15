@@ -1,77 +1,62 @@
 /**
- * Me route — current user profile.
+ * Public user routes — view anyone's profile + history. Auth required (logged-in
+ * users only) but no coordinator/role gate. Sensitive fields (email, no-show
+ * count) are omitted unless the requester is the user themselves or a coordinator.
  */
 
 import { Hono } from "hono";
 import type { AppEnv } from "../middleware.js";
 import { apiError, authMiddleware } from "../middleware.js";
-import { UserRepo } from "../../repos/types.js";
-import { Effect } from "effect";
-import {
-  unsafeNonEmptyString,
-} from "@cubehall/core";
-import type { UserProfile, DraftFormat, NonEmptyArray } from "@cubehall/core";
-import { unsafeNonNegativeInt } from "@cubehall/core";
 
-const me = new Hono<AppEnv>();
+const users = new Hono<AppEnv>();
 
-// GET /api/me — current user + DCI number
-me.get("/", authMiddleware(), async (c) => {
-  const user = c.get("user");
-  // Fetch DCI number from DB (not in the core User type)
-  let dciNumber: number | null = null;
+// GET /api/users/:id — public profile (display name, bio, role, dci, preferred formats)
+users.get("/:id", authMiddleware(), async (c) => {
+  const requester = c.get("user");
+  const targetId = c.req.param("id")!;
   try {
     const { getDb, query } = await import("../../db/sqlite.js");
     const db = await getDb();
-    const rows = query<{ dci_number: number | null }>(db, "SELECT dci_number FROM users WHERE id = ?", [user.id]);
-    dciNumber = rows[0]?.dci_number ?? null;
-  } catch {}
-  return c.json({ user: { ...user, dciNumber } });
-});
+    const rows = query<{
+      id: string; email: string; display_name: string;
+      dci_number: number | null; created_at: string;
+      profile: string; role: string;
+    }>(db, "SELECT id, email, display_name, dci_number, created_at, profile, role FROM users WHERE id = ?", [targetId]);
+    if (rows.length === 0) return apiError(c, 404, "NOT_FOUND", "User not found");
+    const row = rows[0]!;
+    const profile = JSON.parse(row.profile);
+    const isSelfOrCoord = requester.id === row.id || requester.role === "coordinator";
 
-// PATCH /api/me — update profile
-me.patch("/", authMiddleware(), async (c) => {
-  const run = c.get("effectRuntime");
-  const user = c.get("user");
-  const body = await c.req.json();
-
-  try {
-    await run(
-      Effect.gen(function* () {
-        const userRepo = yield* UserRepo;
-
-        const profile: UserProfile = {
-          ...user.profile,
-          ...(body.preferredFormats !== undefined && { preferredFormats: body.preferredFormats }),
-          ...(body.fallbackFormats !== undefined && { fallbackFormats: body.fallbackFormats }),
-          ...(body.hostCapable !== undefined && { hostCapable: body.hostCapable }),
-          ...(body.bio !== undefined && { bio: body.bio }),
-        };
-
-        yield* userRepo.updateProfile(user.id, profile);
-
-        if (body.displayName !== undefined) {
-          yield* userRepo.update({
-            ...user,
-            displayName: unsafeNonEmptyString(body.displayName),
-            profile,
-          });
-        }
-      }),
-    );
-
-    return c.json({ ok: true });
-  } catch {
-    return apiError(c, 500, "INTERNAL", "Failed to update profile");
+    return c.json({
+      user: {
+        id: row.id,
+        displayName: row.display_name,
+        dciNumber: row.dci_number,
+        createdAt: row.created_at,
+        role: row.role,
+        bio: profile.bio ?? "",
+        preferredFormats: profile.preferredFormats ?? [],
+        hostCapable: !!profile.hostCapable,
+        // Sensitive fields gated to self / coordinator
+        email: isSelfOrCoord ? row.email : null,
+        noShowCount: isSelfOrCoord ? (profile.noShowCount ?? 0) : null,
+      },
+    });
+  } catch (e) {
+    return apiError(c, 500, "INTERNAL", `Failed to load user: ${e instanceof Error ? e.message : String(e)}`);
   }
 });
 
-// GET /api/me/history — user's match + Friday history with W/L/D summary.
-me.get("/history", authMiddleware(), async (c) => {
-  const user = c.get("user");
+// GET /api/users/:id/history — same shape as /api/me/history but for any user.
+users.get("/:id/history", authMiddleware(), async (c) => {
+  const targetId = c.req.param("id")!;
   try {
     const { getDb, query } = await import("../../db/sqlite.js");
     const db = await getDb();
+
+    const exists = query<{ id: string }>(db, "SELECT id FROM users WHERE id = ?", [targetId]);
+    if (exists.length === 0) return apiError(c, 404, "NOT_FOUND", "User not found");
+
     const rows = query<{
       match_id: string;
       p1_id: string;
@@ -105,19 +90,11 @@ me.get("/history", authMiddleware(), async (c) => {
       JOIN users u2 ON u2.id = m.player2_id
       WHERE m.player1_id = ? OR m.player2_id = ?
       ORDER BY f.date DESC, r.round_number ASC
-    `, [user.id, user.id]);
+    `, [targetId, targetId]);
 
     type Outcome = "win" | "loss" | "draw" | "pending";
     let wins = 0, losses = 0, draws = 0, pending = 0;
-    const matches: Array<{
-      matchId: string; fridayId: string; fridayDate: string;
-      fridayState: string;
-      podId: string; podFormat: string; cubeName: string;
-      roundNumber: number; opponentId: string; opponentName: string;
-      outcome: Outcome; yourWins: number; opponentWins: number; gameDraws: number;
-    }> = [];
 
-    // Resolve cube names in one batch
     const uniqueCubeIds = Array.from(new Set(rows.map(r => r.cube_id)));
     const cubeNameById: Record<string, string> = {};
     if (uniqueCubeIds.length > 0) {
@@ -127,12 +104,18 @@ me.get("/history", authMiddleware(), async (c) => {
       for (const c of cubes) cubeNameById[c.id] = c.name;
     }
 
+    const matches: Array<{
+      matchId: string; fridayId: string; fridayDate: string; fridayState: string;
+      podId: string; podFormat: string; cubeName: string;
+      roundNumber: number; opponentId: string; opponentName: string;
+      outcome: Outcome; yourWins: number; opponentWins: number; gameDraws: number;
+    }> = [];
+
     for (const r of rows) {
       const result = JSON.parse(r.result) as
         | { kind: "reported"; p1Wins: number; p2Wins: number; draws: number }
-        | { kind: "pending" }
         | { kind: string };
-      const isP1 = r.p1_id === user.id;
+      const isP1 = r.p1_id === targetId;
       const opponentId = isP1 ? r.p2_id : r.p1_id;
       const opponentName = isP1 ? r.p2_name : r.p1_name;
       let outcome: Outcome = "pending";
@@ -169,7 +152,6 @@ me.get("/history", authMiddleware(), async (c) => {
     const decided = wins + losses + draws;
     const winPercent = decided > 0 ? wins / decided : 0;
 
-    // Group by friday
     type Event = {
       fridayId: string; date: string; state: string;
       podId: string; podFormat: string; cubeName: string;
@@ -209,4 +191,31 @@ me.get("/history", authMiddleware(), async (c) => {
   }
 });
 
-export { me };
+// GET /api/users — searchable directory (auth-required, basic info only)
+users.get("/", authMiddleware(), async (c) => {
+  const q = c.req.query("q") ?? "";
+  try {
+    const { getDb, query } = await import("../../db/sqlite.js");
+    const db = await getDb();
+    const BYE_USER_ID = "00000000-0000-0000-0000-000000000bee";
+    let rows: Array<{ id: string; display_name: string; dci_number: number | null }>;
+    if (q.length > 0) {
+      const pattern = `%${q}%`;
+      rows = query(db,
+        `SELECT id, display_name, dci_number FROM users
+         WHERE id != ? AND display_name LIKE ?
+         ORDER BY display_name LIMIT 50`, [BYE_USER_ID, pattern]);
+    } else {
+      rows = query(db,
+        `SELECT id, display_name, dci_number FROM users
+         WHERE id != ? ORDER BY display_name LIMIT 200`, [BYE_USER_ID]);
+    }
+    return c.json({
+      users: rows.map(r => ({ id: r.id, displayName: r.display_name, dciNumber: r.dci_number })),
+    });
+  } catch (e) {
+    return apiError(c, 500, "INTERNAL", `Failed to list users: ${e instanceof Error ? e.message : String(e)}`);
+  }
+});
+
+export { users };

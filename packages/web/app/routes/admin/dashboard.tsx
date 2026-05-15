@@ -1,37 +1,56 @@
 import { Link, useLoaderData } from "react-router";
-import { api } from "../../lib/api";
+import { api, cookieHeader, SERVER_API_BASE } from "../../lib/api";
 
-export async function loader() {
-  const [fridaysResult, venuesResult] = await Promise.all([
-    api.listFridays(),
+export async function loader({ request }: { request: Request }) {
+  const ch = cookieHeader(request);
+  const [fridaysRes, venuesResult] = await Promise.all([
+    fetch(`${SERVER_API_BASE}/api/admin/fridays`, { headers: ch }),
     api.listVenues(),
   ]);
 
+  const fridays: any[] = fridaysRes.ok
+    ? ((await fridaysRes.json()) as { fridays: any[] }).fridays
+    : [];
+
   return {
-    fridays: fridaysResult.ok ? fridaysResult.data.fridays : [],
+    fridays,
     venues: venuesResult.ok ? venuesResult.data.venues : [],
   };
 }
 
 export default function AdminDashboard() {
   const { fridays, venues } = useLoaderData<typeof loader>();
+  const today = new Date().toISOString().slice(0, 10);
+  const upcoming = fridays.filter((f: any) => f.date >= today);
+  const past = fridays.filter((f: any) => f.date < today);
 
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-bold text-ink">Admin Dashboard</h1>
 
       <section>
-        <h2 className="text-lg font-semibold text-ink-soft">Fridays</h2>
+        <h2 className="text-lg font-semibold text-ink-soft">Upcoming fridays</h2>
         <div className="mt-2 space-y-2">
-          {fridays.map((f: any) => (
-            <Link
-              key={f.id}
-              to={`/admin/fridays/${f.id}`}
-              className="block rounded-sm bg-paper-alt p-3 text-sm hover:bg-paper-sunken"
-            >
-              <span className="text-ink">{f.date}</span>
-              <span className="ml-2 text-ink-faint">{f.state.kind}</span>
-            </Link>
+          {upcoming.length === 0 && (
+            <p className="text-sm text-ink-faint">None scheduled.</p>
+          )}
+          {upcoming.map((f: any) => (
+            <FridayLink key={f.id} friday={f} />
+          ))}
+        </div>
+      </section>
+
+      <section>
+        <h2 className="text-lg font-semibold text-ink-soft">Past fridays</h2>
+        <p className="text-xs text-ink-faint mb-2">
+          Open any of these to record results after-the-fact, mark no-shows, or fix pairings.
+        </p>
+        <div className="mt-2 space-y-2">
+          {past.length === 0 && (
+            <p className="text-sm text-ink-faint">No past Fridays in the database.</p>
+          )}
+          {past.map((f: any) => (
+            <FridayLink key={f.id} friday={f} />
           ))}
         </div>
       </section>
@@ -47,6 +66,32 @@ export default function AdminDashboard() {
           ))}
         </div>
       </section>
+    </div>
+  );
+}
+
+function FridayLink({ friday: f }: { friday: any }) {
+  const stateKind = f.state?.kind ?? "?";
+  return (
+    <div className="rounded-sm bg-paper-alt p-3 text-sm flex items-center justify-between gap-3">
+      <Link to={`/admin/fridays/${f.id}`} className="text-ink hover:underline">
+        {f.date}
+        <span className="ml-2 text-ink-faint mono" data-mono>{stateKind}</span>
+      </Link>
+      <div className="flex items-center gap-2">
+        <Link
+          to={`/admin/fridays/${f.id}/pods`}
+          className="text-xs text-dci-teal hover:underline"
+        >
+          pods
+        </Link>
+        <Link
+          to={`/app/fridays/${f.id}`}
+          className="text-xs text-ink-faint hover:underline"
+        >
+          public
+        </Link>
+      </div>
     </div>
   );
 }

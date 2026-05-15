@@ -25,6 +25,10 @@ export default [
         route(":podId", "routes/app/pods/detail.tsx"),
         route(":podId/round/:roundNumber", "routes/app/pods/round.tsx"),
       ]),
+      ...prefix("users", [
+        index("routes/app/users/index.tsx"),
+        route(":userId", "routes/app/users/detail.tsx"),
+      ]),
       route("profile", "routes/app/profile.tsx"),
       route("test", "routes/app/test-panel.tsx"),
     ]),
@@ -34,7 +38,10 @@ export default [
     ...prefix("admin", [
       index("routes/admin/dashboard.tsx"),
       route("audit", "routes/admin/audit.tsx"),
+      route("email-test", "routes/admin/email-test.tsx"),
+      route("settings", "routes/admin/settings.tsx"),
       route("fridays/:fridayId", "routes/admin/friday-override.tsx"),
+      route("fridays/:fridayId/pods", "routes/admin/friday-pods.tsx"),
     ]),
   ]),
 ] satisfies RouteConfig;

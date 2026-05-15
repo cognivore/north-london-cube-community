@@ -2,6 +2,7 @@ import type { MetaFunction } from "react-router";
 import { Link, redirect } from "react-router";
 import { Icon } from "../components/Icon";
 import type { SilkIcon } from "../components/Icon";
+import { VenueCard } from "../components/venue-card";
 import { api, cookieHeader } from "../lib/api";
 
 export async function loader({ request }: { request: Request }) {
@@ -68,7 +69,7 @@ export default function Landing() {
 
         <p className="mt-8 text-sm text-ink-faint">
           18:45 every Friday at{" "}
-          <a href="https://www.owlandhitchhiker.pub/" className="text-dci-teal underline" rel="noopener noreferrer">
+          <a href="https://maps.app.goo.gl/ae9BhBH59TWZ5uu99" className="text-dci-teal underline" rel="noopener noreferrer">
             Owl & Hitchhiker
           </a>
           , Archway N7
@@ -95,7 +96,7 @@ export default function Landing() {
           <div>
             <h2 className="text-2xl font-semibold text-ink">The framework</h2>
             <div className="mt-3 border border-rule-heavy bg-paper-alt">
-              <FrameworkRow icon="house" label="Where" value="Owl & Hitchhiker, 471 Holloway Rd, Archway N7" href="https://www.owlandhitchhiker.pub/" />
+              <FrameworkRow icon="house" label="Where" value="Owl & Hitchhiker, 471 Holloway Rd, Archway N7" href="https://maps.app.goo.gl/ae9BhBH59TWZ5uu99" />
               <FrameworkRow icon="calendar" label="When" value="Every Friday" />
               <FrameworkRow icon="door_in" label="Doors" value="18:30" />
               <FrameworkRow icon="time" label="P1P1" value="18:45" />
@@ -113,6 +114,13 @@ export default function Landing() {
               <Step n="01" text="RSVP so people know you're coming. Doesn't matter if there's a cube yet." />
               <Step n="02" text="Got a cube? Enroll it. Too many? Least recent plays — vote if you feel strongly." />
               <Step n="03" text="Friday evening: show up, draft, play 3 rounds. The app handles pairings, timer, and standings." />
+            </div>
+          </div>
+
+          <div>
+            <h2 className="text-2xl font-semibold text-ink">Find us</h2>
+            <div className="mt-3">
+              <VenueCard />
             </div>
           </div>
         </div>
