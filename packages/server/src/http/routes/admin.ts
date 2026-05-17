@@ -28,7 +28,7 @@ import { BYE_USER_ID } from "../../repos/sqlite-repos.js";
 import { sendEmail } from "../../scheduler.js";
 import { renderEmail, ALL_EMAIL_KINDS, type EmailKind } from "../../email-templates.js";
 import {
-  getAllSettings, setBoolSetting,
+  getAllSettings, setBoolSetting, getBoolSetting,
   SETTING_NO_SHOW_ENFORCEMENT, SETTING_ODD_EVENTS_ALLOWED,
   type SettingKey,
 } from "../../settings.js";
@@ -615,13 +615,37 @@ admin.put("/pods/:id/seats", async (c) => {
   if (!Array.isArray(seats)) {
     return apiError(c, 400, "BAD_REQUEST", "Body must be { seats: [{ userId, team? }], format? }");
   }
-  // Allow size 0 (clear seats) so admin can blank a pod without deleting it.
-  if (seats.length !== 0 && ![4, 6, 8].includes(seats.length)) {
-    return apiError(c, 400, "INVALID_POD_SIZE", `Pod size must be 0, 4, 6, or 8 (got ${seats.length})`);
-  }
   const userIds = seats.map(s => s.userId);
   if (new Set(userIds).size !== userIds.length) {
     return apiError(c, 400, "DUPLICATE_USER", "Cannot seat the same user twice in one pod");
+  }
+
+  // Size validation. Even sizes (0, 4, 6, 8) are always allowed. Odd sizes
+  // (3, 5, 7) are allowed only when oddEventsAllowed is on AND the pod's
+  // format is swiss_draft; team formats need even seating. Odd pods get
+  // BYE-padded to the next even size before insert, so the pairings engine
+  // (which only handles 4/6/8) sees a valid configuration and auto-resolves
+  // the BYE matches the same way no-show fills do.
+  const EVEN_SIZES = [0, 4, 6, 8];
+  const ODD_SIZES = [3, 5, 7];
+  const isEvenOk = EVEN_SIZES.includes(seats.length);
+  const isOddRequested = ODD_SIZES.includes(seats.length);
+  if (!isEvenOk && !isOddRequested) {
+    return apiError(c, 400, "INVALID_POD_SIZE",
+      `Pod size must be 0, 3, 4, 5, 6, 7, or 8 (got ${seats.length})`);
+  }
+  let padToEven = false;
+  if (isOddRequested) {
+    const oddAllowed = await getBoolSetting(SETTING_ODD_EVENTS_ALLOWED);
+    if (!oddAllowed) {
+      return apiError(c, 400, "INVALID_POD_SIZE",
+        `Odd pod sizes are off — enable "Allow odd registrations" in Settings (got ${seats.length})`);
+    }
+    if (requestedFormat !== null && requestedFormat !== "swiss_draft") {
+      return apiError(c, 400, "INVALID_POD_SIZE",
+        `Odd pod sizes only work with swiss_draft (got ${requestedFormat} with ${seats.length} seats)`);
+    }
+    padToEven = true;
   }
 
   try {
@@ -667,11 +691,24 @@ admin.put("/pods/:id/seats", async (c) => {
           }
           format = requestedFormat;
         }
+        // Odd sizes only make sense for swiss_draft. We already filtered out
+        // odd-with-requestedFormat-team above; here we catch odd with an
+        // inherited team format.
+        if (padToEven && format !== "swiss_draft") {
+          return { error: "odd_needs_swiss" as const, format };
+        }
+
+        // Pad odd pods with BYE seats up to the next even size so the
+        // pairings engine (which only understands 4/6/8) gets a valid pod.
+        const finalSeats: Array<{ userId: string; team?: "A" | "B" | null }> =
+          padToEven
+            ? [...seats, { userId: BYE_USER_ID, team: null }]
+            : [...seats];
 
         // Pick a template podSize: actual seats if non-zero, else format's natural size.
         const templateSize: 4 | 6 | 8 =
-          seats.length === 4 || seats.length === 6 || seats.length === 8
-            ? seats.length
+          finalSeats.length === 4 || finalSeats.length === 6 || finalSeats.length === 8
+            ? finalSeats.length
             : format === "team_draft_3v3" ? 6
             : format === "team_draft_4v4" ? 8
             : 4;
@@ -683,8 +720,8 @@ admin.put("/pods/:id/seats", async (c) => {
         });
         yield* Effect.sync(() => {
           dbRun(db, "DELETE FROM seats WHERE pod_id = ?", [podId]);
-          for (let i = 0; i < seats.length; i++) {
-            const s = seats[i]!;
+          for (let i = 0; i < finalSeats.length; i++) {
+            const s = finalSeats[i]!;
             // For team formats, derive team ABAB unless the caller specified one.
             const isTeamFmt = format === "team_draft_2v2" || format === "team_draft_3v3" || format === "team_draft_4v4";
             const team: "A" | "B" | null =
@@ -725,6 +762,10 @@ admin.put("/pods/:id/seats", async (c) => {
       }
       if (result.error === "format_unsupported") {
         return apiError(c, 409, "FORMAT_UNSUPPORTED", `Cube doesn't support ${result.format} (allowed: ${result.allowed.join(", ")})`);
+      }
+      if (result.error === "odd_needs_swiss") {
+        return apiError(c, 400, "INVALID_POD_SIZE",
+          `Odd pod sizes need swiss_draft — pod is currently ${result.format}. Change the format first.`);
       }
     }
     return c.json(result);

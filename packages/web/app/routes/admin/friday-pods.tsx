@@ -14,6 +14,11 @@ export async function loader({ request, params }: { request: Request; params: { 
     ? ((await usersRes.json()) as { users: Array<{ id: string; displayName: string; email: string }> }).users
     : [];
 
+  const settingsRes = await fetch(`${SERVER_API_BASE}/api/admin/settings`, { headers: cookieHeader(request) });
+  const oddAllowed: boolean = settingsRes.ok
+    ? Boolean(((await settingsRes.json()) as { settings: { oddEventsAllowed?: boolean } }).settings.oddEventsAllowed)
+    : false;
+
   const [fridayResult, cubesResult] = await Promise.all([
     api.getFriday(params.fridayId, ch),
     api.listCubes(ch),
@@ -23,6 +28,7 @@ export async function loader({ request, params }: { request: Request; params: { 
     ...fridayResult.data,
     allCubes: cubesResult.ok ? cubesResult.data.cubes : [],
     allUsers,
+    oddAllowed,
   };
 }
 
@@ -120,16 +126,20 @@ export async function action({ request, params }: { request: Request; params: { 
   }
 
   if (intent === "remove-rsvp") {
+    // Removing a player from the list is treated as a no-show: bumps their
+    // count and BYE-fills any seat/match they were in. The state machine has
+    // no "polite cancel from admin" path — if someone needs that, fix it in
+    // the DB.
     const userId = formData.get("userId") as string;
-    const res = await fetch(`${SERVER_API_BASE}/api/admin/fridays/${params.fridayId}/rsvps/${userId}`, {
-      method: "DELETE",
+    const res = await fetch(`${SERVER_API_BASE}/api/admin/fridays/${params.fridayId}/users/${userId}/no-show`, {
+      method: "POST",
       headers: { "Content-Type": "application/json", ...ch },
     });
     if (!res.ok) {
       const body = await res.json().catch(() => ({}));
-      return { error: body?.error?.message ?? `Remove failed (${res.status})` };
+      return { error: body?.error?.message ?? `No-show failed (${res.status})` };
     }
-    return { success: "RSVP cancelled" };
+    return { success: "No-show recorded; count incremented" };
   }
 
   if (intent === "advance") {
@@ -150,13 +160,14 @@ export async function action({ request, params }: { request: Request; params: { 
 export default function FridayPods() {
   const data = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
-  const { friday, pods, rsvps, players, allCubes, allUsers } = data as unknown as {
+  const { friday, pods, rsvps, players, allCubes, allUsers, oddAllowed } = data as unknown as {
     friday: { id: string; date: string; state: { kind: string } };
     pods: Pod[];
     rsvps: Rsvp[];
     players: Record<string, Player>;
     allCubes: Cube[];
     allUsers: Array<{ id: string; displayName: string; email: string }>;
+    oddAllowed: boolean;
   };
 
   const stateKind = friday.state.kind;
@@ -247,6 +258,7 @@ export default function FridayPods() {
             cubeFormats={cube?.supportedFormats ?? [pod.format]}
             podIndex={idx + 1}
             editable={podEditable(pod)}
+            oddAllowed={oddAllowed}
           />
         );
       })}
@@ -291,6 +303,7 @@ function PodEditor({
   cubeFormats,
   podIndex,
   editable,
+  oddAllowed,
 }: {
   pod: Pod;
   allActiveUserIds: string[];
@@ -299,6 +312,7 @@ function PodEditor({
   cubeFormats: string[];
   podIndex: number;
   editable: boolean;
+  oddAllowed: boolean;
 }) {
   const teams: ("A" | "B")[] = ["A", "B"];
   const formId = `pod-form-${pod.id}`;
@@ -413,7 +427,9 @@ function PodEditor({
             Save pod
           </button>
           <p className="text-xs text-ink-faint">
-            Final size must be 0, 4, 6, or 8 (empty rows are ignored).
+            {oddAllowed
+              ? "Final size: 0, 3, 4, 5, 6, 7, or 8. Odd sizes only work with swiss_draft and auto-pad with a BYE seat. Empty rows ignored."
+              : "Final size must be 0, 4, 6, or 8 (empty rows are ignored)."}
           </p>
         </div>
       )}
@@ -449,8 +465,11 @@ function PlayerListPanel({
     <section className="rounded-sm border border-dci-teal bg-paper-alt p-4">
       <h2 className="text-lg font-semibold text-ink mb-2">Player list ({visibleRsvps.length})</h2>
       <p className="text-xs text-ink-faint mb-3">
-        Curator-only: add walk-ins or remove someone before/while seating.
-        Marking a seat as <em>no-show</em> in a pod also flips this list automatically.
+        Curator-only: add walk-ins, or mark a player as no-show.
+        <strong className="text-ink-soft"> no-show</strong> here is the same
+        action as the per-seat button — it sets state to <code>no_show</code>,
+        bumps the user's no-show count, and replaces any seat/pending match
+        with BYE.
       </p>
 
       <ul className="mb-4 space-y-1">
@@ -468,10 +487,10 @@ function PlayerListPanel({
                 <input type="hidden" name="userId" value={r.userId} />
                 <button
                   type="submit"
-                  title="Cancel this RSVP"
+                  title="Mark no-show, increment count, BYE-fill any seat"
                   className="text-xs text-warn hover:underline"
                 >
-                  remove
+                  no-show
                 </button>
               </Form>
             )}
