@@ -1331,6 +1331,128 @@ admin.post("/rounds/:id/complete", async (c) => {
   }
 });
 
+// POST /api/admin/pods/:podId/ffa-rounds — append an FFA round to the pod.
+// Body: { placements: [userId, ...] } in finishing order (index 0 = 1st place).
+// The server creates a fresh round (state=complete) and writes K*(K-1)/2
+// pairwise matches, each result {kind:"reported", p1Wins:2, p2Wins:0} where
+// p1 is the higher-ranked player. Existing tiebreakers (match_points, OMW%,
+// GW%) read from the matches table and pick this up automatically.
+admin.post("/pods/:podId/ffa-rounds", async (c) => {
+  const actor = c.get("user");
+  const podId = c.req.param("podId")!;
+  const body = await c.req.json().catch(() => null) as
+    | { placements?: ReadonlyArray<string> }
+    | null;
+  const placements = body?.placements;
+  if (!Array.isArray(placements) || placements.length < 2) {
+    return apiError(c, 400, "BAD_REQUEST", "Body must be { placements: [userId,...] } with at least 2 entries");
+  }
+  if (placements.some(p => typeof p !== "string" || p.length === 0)) {
+    return apiError(c, 400, "BAD_REQUEST", "placements must be a list of user ids");
+  }
+  if (new Set(placements).size !== placements.length) {
+    return apiError(c, 400, "DUPLICATE_PLACEMENT", "Each player appears once in placements");
+  }
+  if (placements.includes(BYE_USER_ID)) {
+    return apiError(c, 400, "BAD_REQUEST", "BYE cannot be placed");
+  }
+
+  try {
+    const result = await c.get("effectRuntime")(
+      Effect.gen(function* () {
+        const podRepo = yield* PodRepo;
+        const roundRepo = yield* RoundRepo;
+        const userRepo = yield* UserRepo;
+        const auditRepo = yield* AuditRepo;
+        const rng = yield* RNG;
+        const clock = yield* Clock;
+
+        const pod = yield* podRepo.findById(podId as any);
+        if (!pod) return { error: "pod_not_found" as const };
+
+        // Validate every placement is a known user (skip BYE — already filtered).
+        for (const uid of placements) {
+          const u = yield* userRepo.findById(uid as any);
+          if (!u) return { error: "user_not_found" as const, userId: uid };
+        }
+
+        // Next round number is max existing + 1 (or 1 for the first round).
+        const existing = yield* roundRepo.findByPod(pod.id);
+        const nextRoundNumber = existing.reduce(
+          (acc, r) => Math.max(acc, r.roundNumber as unknown as number),
+          0,
+        ) + 1;
+
+        const now = yield* clock.now();
+        const roundId = unsafeRoundId(yield* rng.uuid());
+
+        yield* roundRepo.create({
+          id: roundId,
+          podId: pod.id,
+          roundNumber: unsafePositiveInt(nextRoundNumber),
+          state: "complete" as any,
+          startedAt: now,
+          endedAt: now,
+          timeLimit: unsafeDuration(0),
+          extensions: [],
+          timer: { kind: "not_started" } as any,
+        });
+
+        // Insert C(K,2) matches. For each pair (i,j) with i<j, placements[i]
+        // is the higher-ranked player → player1, with a 2-0 win.
+        const db = yield* Effect.tryPromise({
+          try: () => getDb(),
+          catch: () => ({ kind: "db_error" as const, cause: "getDb" }),
+        });
+        const matchCount = (placements.length * (placements.length - 1)) / 2;
+        const reportedResult = JSON.stringify({
+          kind: "reported", p1Wins: 2, p2Wins: 0, draws: 0,
+        });
+        yield* Effect.sync(() => {
+          for (let i = 0; i < placements.length; i++) {
+            for (let j = i + 1; j < placements.length; j++) {
+              const matchId = crypto.randomUUID();
+              dbRun(db,
+                `INSERT INTO matches (id, round_id, player1_id, player2_id, result, submitted_at, submitted_by)
+                 VALUES (?, ?, ?, ?, ?, ?, ?)`,
+                [matchId, roundId, placements[i], placements[j],
+                 reportedResult, now, actor.id]);
+            }
+          }
+          dbPersist();
+        });
+
+        yield* auditRepo.create({
+          id: unsafeAuditEventId(yield* rng.uuid()),
+          at: now,
+          actorId: actor.id,
+          subject: { kind: "round", id: roundId as string },
+          action: "admin_ffa_round_created",
+          before: null,
+          after: { podId, roundNumber: nextRoundNumber, placements: [...placements] },
+        });
+
+        return {
+          ok: true as const,
+          roundId,
+          roundNumber: nextRoundNumber,
+          matchesCreated: matchCount,
+        };
+      }),
+    );
+
+    if ("error" in result) {
+      if (result.error === "pod_not_found") return apiError(c, 404, "NOT_FOUND", "Pod not found");
+      if (result.error === "user_not_found") {
+        return apiError(c, 404, "NOT_FOUND", `Unknown user in placements: ${result.userId}`);
+      }
+    }
+    return c.json(result);
+  } catch (e) {
+    return apiError(c, 500, "INTERNAL", `Failed to create FFA round: ${e instanceof Error ? e.message : String(e)}`);
+  }
+});
+
 // PUT /api/admin/rounds/:id/matches — replace all matches for a round.
 // Used by coordinators to override pairings before any result is reported.
 admin.put("/rounds/:id/matches", async (c) => {

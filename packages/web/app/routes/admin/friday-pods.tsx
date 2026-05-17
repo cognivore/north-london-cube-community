@@ -142,6 +142,38 @@ export async function action({ request, params }: { request: Request; params: { 
     return { success: "No-show recorded; count incremented" };
   }
 
+  if (intent === "start-ffa") {
+    const podId = formData.get("podId") as string;
+    // Each seated player has a hidden user_id and a select named rank-${userId}.
+    // We collect them, sort by rank ascending, then submit the ordered list.
+    const ranked: Array<{ userId: string; rank: number }> = [];
+    for (const [key, value] of formData.entries()) {
+      if (!key.startsWith("rank-")) continue;
+      const userId = key.slice("rank-".length);
+      const rank = parseInt(String(value), 10);
+      if (Number.isFinite(rank)) ranked.push({ userId, rank });
+    }
+    if (ranked.length < 2) return { error: "Need at least 2 players for FFA" };
+    const ranks = ranked.map(r => r.rank).sort((a, b) => a - b);
+    const expected = Array.from({ length: ranked.length }, (_, i) => i + 1);
+    if (ranks.some((r, i) => r !== expected[i])) {
+      return { error: `Ranks must be a permutation of 1..${ranked.length} (got ${ranks.join(",")})` };
+    }
+    ranked.sort((a, b) => a.rank - b.rank);
+    const placements = ranked.map(r => r.userId);
+    const res = await fetch(`${SERVER_API_BASE}/api/admin/pods/${podId}/ffa-rounds`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...ch },
+      body: JSON.stringify({ placements }),
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      return { error: body?.error?.message ?? `FFA round failed (${res.status})` };
+    }
+    const body = await res.json() as { roundNumber: number; matchesCreated: number };
+    return { success: `FFA round ${body.roundNumber} recorded (${body.matchesCreated} virtual matches)` };
+  }
+
   if (intent === "advance") {
     const res = await fetch(`${SERVER_API_BASE}/api/lifecycle/fridays/${params.fridayId}/advance`, {
       method: "POST",
@@ -433,6 +465,13 @@ function PodEditor({
           </p>
         </div>
       )}
+
+      <FfaRoundPanel
+        podId={pod.id}
+        realPlayers={pod.seats
+          .filter(s => s.userId !== "00000000-0000-0000-0000-000000000bee")
+          .map(s => ({ userId: s.userId, displayName: playerName(s.userId) }))}
+      />
     </section>
   );
 }
@@ -552,5 +591,56 @@ function PlayerListPanel({
         </Form>
       </details>
     </section>
+  );
+}
+
+function FfaRoundPanel({
+  podId,
+  realPlayers,
+}: {
+  podId: string;
+  realPlayers: ReadonlyArray<{ userId: string; displayName: string }>;
+}) {
+  if (realPlayers.length < 2) return null;
+  const k = realPlayers.length;
+  return (
+    <details className="mt-4 rounded-sm border border-dci-teal bg-paper p-3">
+      <summary className="cursor-pointer text-sm font-semibold text-dci-teal">
+        Start {k}-player FFA now
+      </summary>
+      <Form method="post" className="mt-3 space-y-2">
+        <input type="hidden" name="intent" value="start-ffa" />
+        <input type="hidden" name="podId" value={podId} />
+        <p className="text-xs text-ink-faint">
+          Pick a finishing rank for each player (1 = 1st place). Ranks must be a
+          permutation of <code>1..{k}</code>. Saving creates a new round and
+          K&times;(K-1)/2 = <strong>{(k * (k - 1)) / 2}</strong> virtual
+          pairwise matches — rank-N beats N+1..K and loses to 1..N-1.
+        </p>
+        <ul className="space-y-1">
+          {realPlayers.map((p, i) => (
+            <li key={p.userId} className="flex items-center gap-2 text-sm">
+              <span className="flex-1 text-ink">{p.displayName}</span>
+              <select
+                name={`rank-${p.userId}`}
+                defaultValue={String(i + 1)}
+                className="rounded-sm border border-rule-heavy bg-paper px-2 py-1.5 text-sm text-ink mono"
+                data-mono
+              >
+                {Array.from({ length: k }, (_, j) => j + 1).map(r => (
+                  <option key={r} value={r}>{r}</option>
+                ))}
+              </select>
+            </li>
+          ))}
+        </ul>
+        <button
+          type="submit"
+          className="rounded-sm border border-dci-teal bg-paper px-3 py-1.5 text-sm font-semibold text-dci-teal hover:bg-paper-alt min-h-[44px]"
+        >
+          Start {k}-player FFA now
+        </button>
+      </Form>
+    </details>
   );
 }
