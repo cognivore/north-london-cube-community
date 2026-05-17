@@ -93,6 +93,32 @@ export async function action({ request, params }: { request: Request; params: { 
     return { success: "Player added (confirmed)" };
   }
 
+  if (intent === "create-walkin") {
+    const displayName = (formData.get("displayName") as string | null)?.trim();
+    const email = (formData.get("email") as string | null)?.trim() ?? "";
+    if (!displayName) return { error: "Walk-in needs a name" };
+    const createRes = await fetch(`${SERVER_API_BASE}/api/admin/users`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...ch },
+      body: JSON.stringify(email.length > 0 ? { displayName, email } : { displayName }),
+    });
+    if (!createRes.ok) {
+      const body = await createRes.json().catch(() => ({}));
+      return { error: body?.error?.message ?? `Create user failed (${createRes.status})` };
+    }
+    const created = await createRes.json() as { user: { id: string; email: string } };
+    const rsvpRes = await fetch(`${SERVER_API_BASE}/api/admin/fridays/${params.fridayId}/rsvps`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...ch },
+      body: JSON.stringify({ userId: created.user.id }),
+    });
+    if (!rsvpRes.ok) {
+      const body = await rsvpRes.json().catch(() => ({}));
+      return { error: `User created but RSVP failed: ${body?.error?.message ?? rsvpRes.status}` };
+    }
+    return { success: `Walk-in ${displayName} created (${created.user.email}) and added` };
+  }
+
   if (intent === "remove-rsvp") {
     const userId = formData.get("userId") as string;
     const res = await fetch(`${SERVER_API_BASE}/api/admin/fridays/${params.fridayId}/rsvps/${userId}`, {
@@ -472,6 +498,40 @@ function PlayerListPanel({
           Add player
         </button>
       </Form>
+
+      <details className="mt-3">
+        <summary className="cursor-pointer text-xs text-ink-soft hover:text-ink">
+          Walk-in not in the list? Create a new user
+        </summary>
+        <Form method="post" className="mt-2 space-y-2 rounded-sm border border-rule p-3">
+          <input type="hidden" name="intent" value="create-walkin" />
+          <p className="text-xs text-ink-faint">
+            Creates a verified member and RSVPs them as confirmed. Leave email
+            blank to auto-generate a <code>@cubehall.local</code> placeholder
+            you can fix later from <em>Users</em>.
+          </p>
+          <div className="flex flex-wrap items-center gap-2">
+            <input
+              name="displayName"
+              placeholder="Display name"
+              required
+              className="flex-1 min-w-[160px] rounded-sm border border-rule-heavy bg-paper px-2 py-1.5 text-sm text-ink"
+            />
+            <input
+              name="email"
+              type="email"
+              placeholder="email (optional)"
+              className="flex-1 min-w-[200px] rounded-sm border border-rule bg-paper px-2 py-1.5 text-sm text-ink"
+            />
+            <button
+              type="submit"
+              className="rounded-sm border border-dci-teal bg-paper px-3 py-1.5 text-sm font-semibold text-dci-teal hover:bg-paper-alt"
+            >
+              Create + add
+            </button>
+          </div>
+        </Form>
+      </details>
     </section>
   );
 }

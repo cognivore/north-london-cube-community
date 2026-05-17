@@ -13,6 +13,8 @@ import {
 import {
   transition, unsafePositiveInt, unsafeRoundId, unsafeDuration,
   packPods, isNonEmpty,
+  unsafeUserId, unsafeEmail, unsafeNonEmptyString, unsafeISO8601,
+  unsafeNonNegativeInt, unsafeAuditEventId,
 } from "@cubehall/core";
 import type {
   DraftFormat, FridayEvent, NonEmptyArray, PackPodsInput, UserProfile,
@@ -971,6 +973,212 @@ admin.get("/users", async (c) => {
     });
   } catch (e) {
     return apiError(c, 500, "INTERNAL", `Failed to list users: ${e instanceof Error ? e.message : String(e)}`);
+  }
+});
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+function slugifyForLocalEmail(name: string): string {
+  const slug = name.trim().toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 32);
+  return slug.length > 0 ? slug : "walkin";
+}
+
+// POST /api/admin/users — admin-vouched user creation. Skips the magic-link
+// verification flow; the admin is asserting the user is real (walk-in scenario).
+// If email is omitted, generates `${slug}@cubehall.local` with a -N suffix on
+// collision, so the admin can register a walk-in by display name alone and
+// fill in the real email later via PATCH.
+admin.post("/users", async (c) => {
+  const actor = c.get("user");
+  const body = await c.req.json().catch(() => null) as
+    { displayName?: string; email?: string } | null;
+  const displayName = body?.displayName?.trim();
+  if (!displayName) return apiError(c, 400, "BAD_REQUEST", "displayName required");
+
+  let email = body?.email?.trim().toLowerCase() ?? "";
+  if (email.length > 0 && !EMAIL_RE.test(email)) {
+    return apiError(c, 400, "BAD_REQUEST", "Invalid email");
+  }
+
+  try {
+    const db = await getDb();
+
+    if (email.length === 0) {
+      const base = slugifyForLocalEmail(displayName);
+      let candidate = `${base}@cubehall.local`;
+      let n = 2;
+      while (dbQuery<{ c: number }>(db,
+        "SELECT count(*) as c FROM users WHERE email = ?", [candidate])[0]!.c > 0) {
+        candidate = `${base}-${n}@cubehall.local`;
+        n += 1;
+      }
+      email = candidate;
+    } else {
+      const dupe = dbQuery<{ c: number }>(db,
+        "SELECT count(*) as c FROM users WHERE email = ?", [email])[0]!.c;
+      if (dupe > 0) return apiError(c, 409, "EMAIL_TAKEN", "Email already in use");
+    }
+
+    const run = c.get("effectRuntime");
+    const created = await run(
+      Effect.gen(function* () {
+        const rng = yield* RNG;
+        const clock = yield* Clock;
+        const userRepo = yield* UserRepo;
+        const auditRepo = yield* AuditRepo;
+
+        const userId = unsafeUserId(yield* rng.uuid());
+        const now = yield* clock.now();
+
+        yield* userRepo.create({
+          id: userId,
+          email: unsafeEmail(email),
+          displayName: unsafeNonEmptyString(displayName),
+          createdAt: now,
+          authState: { kind: "verified" },
+          profile: {
+            preferredFormats: ["swiss_draft"],
+            fallbackFormats: [],
+            hostCapable: false,
+            bio: "",
+            noShowCount: unsafeNonNegativeInt(0),
+            banned: { kind: "not_banned" },
+          },
+          role: "member",
+        });
+
+        yield* auditRepo.create({
+          id: unsafeAuditEventId(yield* rng.uuid()),
+          at: now,
+          actorId: actor.id,
+          subject: { kind: "user", id: userId as string },
+          action: "admin_created",
+          before: null,
+          after: { displayName, email },
+        });
+
+        return { userId, now };
+      }),
+    );
+
+    // Assign DCI number (same scheme as registration).
+    const countResult = dbQuery<{ cnt: number }>(db,
+      "SELECT count(*) as cnt FROM users WHERE dci_number IS NOT NULL");
+    const assigned = countResult[0]?.cnt ?? 0;
+    const dciNumber = assigned < 8 ? assigned + 1 : 100 + (assigned - 8);
+    dbRun(db, "UPDATE users SET dci_number = ? WHERE id = ?", [dciNumber, created.userId]);
+    dbPersist();
+
+    return c.json({
+      user: {
+        id: created.userId,
+        displayName,
+        email,
+        createdAt: created.now,
+        role: "member",
+        dciNumber,
+      },
+    }, 201);
+  } catch (e) {
+    return apiError(c, 500, "INTERNAL", `Failed to create user: ${e instanceof Error ? e.message : String(e)}`);
+  }
+});
+
+// PATCH /api/admin/users/:id — update displayName and/or email. Used to fill in
+// the real email of a walk-in created earlier with a placeholder.
+admin.patch("/users/:id", async (c) => {
+  const actor = c.get("user");
+  const userId = c.req.param("id")!;
+  if (userId === BYE_USER_ID) return apiError(c, 400, "BAD_REQUEST", "Cannot edit BYE user");
+
+  const body = await c.req.json().catch(() => null) as
+    { displayName?: string; email?: string } | null;
+  if (!body) return apiError(c, 400, "BAD_REQUEST", "Body required");
+
+  const nextDisplayName = body.displayName?.trim();
+  const nextEmail = body.email?.trim().toLowerCase();
+
+  if (nextDisplayName !== undefined && nextDisplayName.length === 0) {
+    return apiError(c, 400, "BAD_REQUEST", "displayName cannot be empty");
+  }
+  if (nextEmail !== undefined && !EMAIL_RE.test(nextEmail)) {
+    return apiError(c, 400, "BAD_REQUEST", "Invalid email");
+  }
+
+  try {
+    const db = await getDb();
+
+    if (nextEmail !== undefined) {
+      const dupe = dbQuery<{ c: number }>(db,
+        "SELECT count(*) as c FROM users WHERE email = ? AND id != ?",
+        [nextEmail, userId])[0]!.c;
+      if (dupe > 0) return apiError(c, 409, "EMAIL_TAKEN", "Email already in use");
+    }
+
+    const run = c.get("effectRuntime");
+    const result = await run(
+      Effect.gen(function* () {
+        const userRepo = yield* UserRepo;
+        const auditRepo = yield* AuditRepo;
+        const rng = yield* RNG;
+        const clock = yield* Clock;
+
+        const user = yield* userRepo.findById(userId as any);
+        if (!user) return { error: "not_found" as const };
+
+        const before: Record<string, string> = {};
+        const after: Record<string, string> = {};
+        if (nextDisplayName !== undefined && nextDisplayName !== user.displayName) {
+          before.displayName = user.displayName;
+          after.displayName = nextDisplayName;
+        }
+        if (nextEmail !== undefined && nextEmail !== user.email) {
+          before.email = user.email;
+          after.email = nextEmail;
+        }
+        if (Object.keys(after).length === 0) {
+          return { ok: true as const, user, changed: false };
+        }
+
+        const updated = {
+          ...user,
+          displayName: nextDisplayName !== undefined
+            ? unsafeNonEmptyString(nextDisplayName)
+            : user.displayName,
+          email: nextEmail !== undefined ? unsafeEmail(nextEmail) : user.email,
+        };
+        yield* userRepo.update(updated);
+
+        yield* auditRepo.create({
+          id: unsafeAuditEventId(yield* rng.uuid()),
+          at: yield* clock.now(),
+          actorId: actor.id,
+          subject: { kind: "user", id: userId },
+          action: "admin_updated",
+          before,
+          after,
+        });
+
+        return { ok: true as const, user: updated, changed: true };
+      }),
+    );
+
+    if ("error" in result) return apiError(c, 404, "NOT_FOUND", "User not found");
+    return c.json({
+      user: {
+        id: result.user.id,
+        displayName: result.user.displayName,
+        email: result.user.email,
+        createdAt: result.user.createdAt,
+        role: result.user.role,
+      },
+      changed: result.changed,
+    });
+  } catch (e) {
+    return apiError(c, 500, "INTERNAL", `Failed to update user: ${e instanceof Error ? e.message : String(e)}`);
   }
 });
 
