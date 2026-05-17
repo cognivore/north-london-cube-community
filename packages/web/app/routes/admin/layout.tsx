@@ -20,6 +20,9 @@ export default function AdminLayout() {
             <Link to="/admin/audit" className="text-ink-soft underline hover:text-ink">
               Audit
             </Link>
+            <Link to="/admin/users" className="text-ink-soft underline hover:text-ink">
+              Users
+            </Link>
             <Link to="/admin/email-test" className="text-ink-soft underline hover:text-ink">
               Email test
             </Link>

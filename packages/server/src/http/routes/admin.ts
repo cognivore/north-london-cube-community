@@ -942,25 +942,32 @@ admin.get("/fridays", async (c) => {
   }
 });
 
-// GET /api/admin/users — list users for admin pickers (returns id, displayName, email)
+// GET /api/admin/users — list users for admin pickers (returns id, displayName, email, createdAt, role)
 admin.get("/users", async (c) => {
   const q = c.req.query("q") ?? "";
   try {
     const db = await getDb();
-    let rows: Array<{ id: string; display_name: string; email: string }>;
+    type Row = { id: string; display_name: string; email: string; created_at: string; role: string };
+    let rows: Row[];
     if (q.length > 0) {
       const pattern = `%${q}%`;
-      rows = dbQuery<{ id: string; display_name: string; email: string }>(db,
-        `SELECT id, display_name, email FROM users
+      rows = dbQuery<Row>(db,
+        `SELECT id, display_name, email, created_at, role FROM users
          WHERE id != ? AND (display_name LIKE ? OR email LIKE ?)
          ORDER BY display_name LIMIT 50`, [BYE_USER_ID, pattern, pattern]);
     } else {
-      rows = dbQuery<{ id: string; display_name: string; email: string }>(db,
-        `SELECT id, display_name, email FROM users
-         WHERE id != ? ORDER BY display_name LIMIT 200`, [BYE_USER_ID]);
+      rows = dbQuery<Row>(db,
+        `SELECT id, display_name, email, created_at, role FROM users
+         WHERE id != ? ORDER BY display_name LIMIT 500`, [BYE_USER_ID]);
     }
     return c.json({
-      users: rows.map(r => ({ id: r.id, displayName: r.display_name, email: r.email })),
+      users: rows.map(r => ({
+        id: r.id,
+        displayName: r.display_name,
+        email: r.email,
+        createdAt: r.created_at,
+        role: r.role,
+      })),
     });
   } catch (e) {
     return apiError(c, 500, "INTERNAL", `Failed to list users: ${e instanceof Error ? e.message : String(e)}`);
