@@ -25,7 +25,8 @@ users.get("/:id", authMiddleware(), async (c) => {
     if (rows.length === 0) return apiError(c, 404, "NOT_FOUND", "User not found");
     const row = rows[0]!;
     const profile = JSON.parse(row.profile);
-    const isSelfOrCoord = requester.id === row.id || requester.role === "coordinator";
+    const isCoord = requester.role === "coordinator";
+    const isSelf = requester.id === row.id;
 
     return c.json({
       user: {
@@ -37,9 +38,12 @@ users.get("/:id", authMiddleware(), async (c) => {
         bio: profile.bio ?? "",
         preferredFormats: profile.preferredFormats ?? [],
         hostCapable: !!profile.hostCapable,
-        // Sensitive fields gated to self / coordinator
-        email: isSelfOrCoord ? row.email : null,
-        noShowCount: isSelfOrCoord ? (profile.noShowCount ?? 0) : null,
+        // Email is coordinator-only. Members can still see their own email
+        // on /app/profile (own settings) via /api/me.
+        email: isCoord ? row.email : null,
+        // No-show count stays gated to self-or-coord — members get to know
+        // their own number for self-policing.
+        noShowCount: (isCoord || isSelf) ? (profile.noShowCount ?? 0) : null,
       },
     });
   } catch (e) {

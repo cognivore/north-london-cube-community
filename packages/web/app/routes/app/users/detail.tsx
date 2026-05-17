@@ -1,5 +1,5 @@
 import { Link, useLoaderData } from "react-router";
-import { cookieHeader, SERVER_API_BASE } from "../../../lib/api";
+import { api, cookieHeader, SERVER_API_BASE } from "../../../lib/api";
 
 type PublicUser = {
   id: string;
@@ -26,20 +26,22 @@ type HistoryMatch = {
 
 export async function loader({ request, params }: { request: Request; params: { userId: string } }) {
   const ch = { headers: cookieHeader(request) };
-  const [userRes, historyRes] = await Promise.all([
+  const [userRes, historyRes, meRes] = await Promise.all([
     fetch(`${SERVER_API_BASE}/api/users/${params.userId}`, ch),
     fetch(`${SERVER_API_BASE}/api/users/${params.userId}/history`, ch),
+    api.me(ch),
   ]);
   if (!userRes.ok) throw new Response("Not found", { status: 404 });
   const { user } = (await userRes.json()) as { user: PublicUser };
   const history = historyRes.ok
     ? ((await historyRes.json()) as { summary: HistorySummary; events: HistoryEvent[]; matches: HistoryMatch[] })
     : null;
-  return { user, history };
+  const viewerIsCoord = meRes.ok && meRes.data.user?.role === "coordinator";
+  return { user, history, viewerIsCoord };
 }
 
 export default function UserDetail() {
-  const { user, history } = useLoaderData<typeof loader>();
+  const { user, history, viewerIsCoord } = useLoaderData<typeof loader>();
 
   return (
     <div className="space-y-6">
@@ -47,7 +49,17 @@ export default function UserDetail() {
         <h1 className="text-2xl font-bold text-ink">{user.displayName}</h1>
         <p className="text-sm text-ink-faint">
           {user.role}
-          {user.email && <> · <span className="mono" data-mono>{user.email}</span></>}
+          {user.email && (
+            <>
+              {" · "}
+              <span className="mono" data-mono>{user.email}</span>
+              {viewerIsCoord && (
+                <span className="ml-2 text-xs text-amber italic">
+                  [You see email because you are coordinator]
+                </span>
+              )}
+            </>
+          )}
           {user.noShowCount != null && user.noShowCount > 0 && (
             <span className="ml-2 text-warn">no-shows: {user.noShowCount}</span>
           )}
