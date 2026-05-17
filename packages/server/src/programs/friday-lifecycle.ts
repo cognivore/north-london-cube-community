@@ -176,6 +176,55 @@ export const advanceFriday = (fridayId: string) =>
         return updated;
       }
 
+      case "enrollment_closed": {
+        // Reached if the state machine was parked here without auto-advancing
+        // (e.g. an admin used force-state). Mirror the post-close-enrollments
+        // half of the `open` case: count active enrollments and either open
+        // the vote, skip straight to vote_closed, or cancel if there are no
+        // cubes.
+        const enrollments = yield* enrollmentRepo.findActiveByFriday(fid);
+        if (enrollments.length === 0) {
+          const cancelResult = transition(friday.state, { kind: "cancel_no_cubes" });
+          if (isOk(cancelResult)) {
+            updated = { ...friday, state: cancelResult.value };
+            yield* fridayRepo.update(updated);
+            yield* logger.info("Friday cancelled: no cubes", { fridayId });
+          }
+          return updated!;
+        }
+
+        if (enrollments.length >= 3) {
+          const voteEvent: FridayEvent = {
+            kind: "open_vote",
+            vote: {
+              candidates: enrollments.map(e => e.id) as NonEmptyArray<any>,
+              opensAt: now,
+              closesAt: now,
+            },
+          };
+          const voteResult = transition(friday.state, voteEvent);
+          if (!isOk(voteResult)) {
+            return yield* Effect.fail<FridayLifecycleError>({ kind: "transition_failed", message: voteResult.error.message });
+          }
+          updated = { ...friday, state: voteResult.value };
+          yield* fridayRepo.update(updated);
+          yield* logger.info("Vote opened (from enrollment_closed)", { fridayId, candidates: enrollments.length });
+        } else {
+          const skipEvent: FridayEvent = {
+            kind: "skip_vote",
+            winners: enrollments.map(e => e.id) as NonEmptyArray<any>,
+          };
+          const skipResult = transition(friday.state, skipEvent);
+          if (!isOk(skipResult)) {
+            return yield* Effect.fail<FridayLifecycleError>({ kind: "transition_failed", message: skipResult.error.message });
+          }
+          updated = { ...friday, state: skipResult.value };
+          yield* fridayRepo.update(updated);
+          yield* logger.info("Vote skipped from enrollment_closed (≤2 cubes)", { fridayId });
+        }
+        return updated;
+      }
+
       case "vote_open": {
         // Close vote — if votes exist, run IRV. Otherwise, pick least recently played.
         const enrollments = yield* enrollmentRepo.findActiveByFriday(fid);
@@ -213,6 +262,22 @@ export const advanceFriday = (fridayId: string) =>
         // an optional "Shuffle seating" button that runs packPods). This avoids
         // the failure mode where packPods rejects a configuration with too few
         // RSVPs and leaves the Friday stranded.
+        //
+        // If pods already exist for this Friday (e.g. admin bumped the state
+        // backward and is re-advancing), skip pod creation and just transition.
+        // Without this guard, we'd duplicate the entire pod set.
+        const existingPods = yield* podRepo.findByFriday(fid);
+        if (existingPods.length > 0) {
+          const lockedState = { kind: "locked", config: null } as unknown as Friday["state"];
+          yield* fridayRepo.updateState(fid, lockedState);
+          updated = { ...friday, state: lockedState, lockedAt: now };
+          yield* fridayRepo.update(updated);
+          yield* logger.info("Friday locked (pods already existed — skipped re-create)", {
+            fridayId, podCount: existingPods.length,
+          });
+          return updated;
+        }
+
         const winners = friday.state.winners;
         const enrollments = yield* enrollmentRepo.findActiveByFriday(fid);
         const winnerEnrollments = enrollments.filter(e => winners.includes(e.id));
