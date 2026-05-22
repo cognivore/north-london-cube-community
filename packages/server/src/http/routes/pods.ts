@@ -6,9 +6,10 @@ import { Hono } from "hono";
 import { streamSSE } from "hono/streaming";
 import { Effect } from "effect";
 import type { AppEnv } from "../middleware.js";
-import { apiError, authMiddleware } from "../middleware.js";
+import { apiError, authMiddleware, coordinatorMiddleware } from "../middleware.js";
 import { reportMatch } from "../../programs/match-report.js";
 import { PodRepo, SeatRepo, RoundRepo, MatchRepo } from "../../repos/types.js";
+import { unsafeISO8601, unsafeDuration } from "@cubehall/core";
 
 const pods = new Hono<AppEnv>();
 
@@ -184,6 +185,91 @@ pods.post("/:id/rounds/:n/start", authMiddleware(), async (c) => {
     return c.json({ round: result });
   } catch {
     return apiError(c, 500, "INTERNAL", "Failed to start round");
+  }
+});
+
+// POST /api/pods/:id/rounds/:n/pause — coordinator pauses the timer
+pods.post("/:id/rounds/:n/pause", authMiddleware(), coordinatorMiddleware(), async (c) => {
+  const run = c.get("effectRuntime");
+  const podId = c.req.param("id");
+  const roundNumber = parseInt(c.req.param("n")!, 10);
+
+  try {
+    const result = await run(
+      Effect.gen(function* () {
+        const roundRepo = yield* RoundRepo;
+        const rounds = yield* roundRepo.findByPod(podId as any);
+        const round = rounds.find((r) => r.roundNumber === roundNumber);
+        if (!round) return { error: "not_found" as const };
+        if (round.timer.kind !== "running") {
+          return { error: "not_running" as const, kind: round.timer.kind };
+        }
+        const nowMs = Date.now();
+        const deadlineMs = Date.parse(round.timer.deadline);
+        const remainingSec = Math.max(0, Math.floor((deadlineMs - nowMs) / 1000));
+        const updated = {
+          ...round,
+          timer: {
+            kind: "paused" as const,
+            pausedAt: unsafeISO8601(new Date(nowMs).toISOString()),
+            remaining: unsafeDuration(remainingSec),
+          },
+        };
+        yield* roundRepo.update(updated);
+        return { ok: true as const, timer: updated.timer };
+      }),
+    );
+    if ("error" in result) {
+      if (result.error === "not_found") return apiError(c, 404, "NOT_FOUND", "Round not found");
+      return apiError(c, 409, "CONFLICT", `Timer is not running (kind=${result.kind})`);
+    }
+    return c.json(result);
+  } catch (e) {
+    return apiError(c, 500, "INTERNAL", `Failed to pause timer: ${e instanceof Error ? e.message : String(e)}`);
+  }
+});
+
+// POST /api/pods/:id/rounds/:n/resume — coordinator resumes a paused timer
+pods.post("/:id/rounds/:n/resume", authMiddleware(), coordinatorMiddleware(), async (c) => {
+  const run = c.get("effectRuntime");
+  const podId = c.req.param("id");
+  const roundNumber = parseInt(c.req.param("n")!, 10);
+
+  try {
+    const result = await run(
+      Effect.gen(function* () {
+        const roundRepo = yield* RoundRepo;
+        const rounds = yield* roundRepo.findByPod(podId as any);
+        const round = rounds.find((r) => r.roundNumber === roundNumber);
+        if (!round) return { error: "not_found" as const };
+        if (round.timer.kind !== "paused") {
+          return { error: "not_paused" as const, kind: round.timer.kind };
+        }
+        const nowMs = Date.now();
+        const remainingSec = round.timer.remaining as unknown as number;
+        const limitSec = round.timeLimit as unknown as number;
+        const deadlineIso = unsafeISO8601(new Date(nowMs + remainingSec * 1000).toISOString());
+        const elapsedSec = Math.max(0, limitSec - remainingSec);
+        const updated = {
+          ...round,
+          timer: {
+            kind: "running" as const,
+            startedAt: unsafeISO8601(new Date(nowMs).toISOString()),
+            deadline: deadlineIso,
+            elapsed: unsafeDuration(elapsedSec),
+          },
+        };
+        yield* roundRepo.update(updated);
+        return { ok: true as const, timer: updated.timer };
+      }),
+    );
+    if ("error" in result) {
+      if (result.error === "not_found") return apiError(c, 404, "NOT_FOUND", "Round not found");
+      return apiError(c, 409, "CONFLICT", `Timer is not paused (kind=${result.kind})`);
+    }
+    return c.json(result);
+  } catch (e) {
+    return apiError(c, 500, "INTERNAL", `Failed to resume timer: ${e instanceof Error ? e.message : String(e)}`);
   }
 });
 

@@ -31,7 +31,7 @@ function lockDelay(): number {
 
 function sendgridKey(): string { return process.env.SENDGRID_API_KEY ?? ""; }
 function fromEmail(): string { return process.env.FROM_EMAIL ?? "noreply@cube.london"; }
-function appUrl(): string { return process.env.APP_URL ?? "https://north.cube.london"; }
+export function appUrl(): string { return process.env.APP_URL ?? "https://north.cube.london"; }
 function testMode(): boolean { return process.env.TEST_MODE === "true"; }
 function toAddr(email: string): string { return testMode() ? "jm@memorici.de" : email; }
 function subjectPrefix(): string { return testMode() ? "[TEST] " : ""; }

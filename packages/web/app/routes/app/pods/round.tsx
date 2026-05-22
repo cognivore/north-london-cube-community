@@ -95,6 +95,21 @@ export async function action({ request, params }: { request: Request; params: { 
     return { success: "Round deleted" };
   }
 
+  if (intent === "pause-timer" || intent === "resume-timer") {
+    const podId = formData.get("podId") as string;
+    const roundNumber = formData.get("roundNumber") as string;
+    const action = intent === "pause-timer" ? "pause" : "resume";
+    const res = await fetch(
+      `${SERVER_API_BASE}/api/pods/${podId}/rounds/${roundNumber}/${action}`,
+      { method: "POST", headers: { "Content-Type": "application/json", ...ch } },
+    );
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      return { error: body?.error?.message ?? `${action} failed (${res.status})` };
+    }
+    return { success: action === "pause" ? "Timer paused" : "Timer resumed" };
+  }
+
   if (intent === "save-pairings") {
     const roundId = formData.get("roundId") as string;
     const matchesRaw = formData.get("matches") as string;
@@ -134,7 +149,11 @@ export default function RoundView() {
       <h1 className="text-2xl font-bold text-ink">Round {roundNumber}</h1>
 
       {/* Timer */}
-      <TimerDisplay podId={data.pod.id} />
+      <TimerDisplay
+        podId={data.pod.id}
+        roundNumber={roundNumber}
+        canControl={isCoordinator && currentRound?.state === "in_progress"}
+      />
 
       {actionData?.error && (
         <div className="rounded-sm bg-warn-soft p-3 text-sm text-warn">
@@ -461,7 +480,15 @@ function ScoreInput({ label, name, defaultValue = "0" }: { label: string; name: 
   );
 }
 
-function TimerDisplay({ podId }: { podId: string }) {
+function TimerDisplay({
+  podId,
+  roundNumber,
+  canControl,
+}: {
+  podId: string;
+  roundNumber: number;
+  canControl: boolean;
+}) {
   const [timer, setTimer] = useState<any>({ kind: "not_started" });
 
   useEffect(() => {
@@ -473,6 +500,34 @@ function TimerDisplay({ podId }: { podId: string }) {
     });
     return () => eventSource.close();
   }, [podId]);
+
+  const pauseBtn = (
+    <Form method="post" className="mt-3">
+      <input type="hidden" name="intent" value="pause-timer" />
+      <input type="hidden" name="podId" value={podId} />
+      <input type="hidden" name="roundNumber" value={roundNumber} />
+      <button
+        type="submit"
+        className="rounded-sm border border-rule-heavy bg-paper px-3 py-1.5 text-xs text-ink-faint hover:text-ink"
+      >
+        Pause timer
+      </button>
+    </Form>
+  );
+
+  const resumeBtn = (
+    <Form method="post" className="mt-3">
+      <input type="hidden" name="intent" value="resume-timer" />
+      <input type="hidden" name="podId" value={podId} />
+      <input type="hidden" name="roundNumber" value={roundNumber} />
+      <button
+        type="submit"
+        className="rounded-sm border border-amber bg-paper px-3 py-1.5 text-xs font-semibold text-amber hover:bg-amber-soft"
+      >
+        Resume timer
+      </button>
+    </Form>
+  );
 
   if (timer.kind === "not_started") {
     return (
@@ -494,6 +549,7 @@ function TimerDisplay({ podId }: { podId: string }) {
           {mins.toString().padStart(2, "0")}:{secs.toString().padStart(2, "0")}
         </p>
         <p className="mt-1 text-sm text-ink-faint">Round in progress</p>
+        {canControl && pauseBtn}
       </div>
     );
   }
@@ -509,6 +565,7 @@ function TimerDisplay({ podId }: { podId: string }) {
           {mins.toString().padStart(2, "0")}:{secs.toString().padStart(2, "0")}
         </p>
         <p className="mt-1 text-sm text-amber">Paused</p>
+        {canControl && resumeBtn}
       </div>
     );
   }

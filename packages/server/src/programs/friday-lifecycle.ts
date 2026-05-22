@@ -133,7 +133,6 @@ export const advanceFriday = (fridayId: string) =>
         yield* fridayRepo.update(updated);
         yield* logger.info("Enrollments closed", { fridayId });
 
-        // Immediately evaluate vote requirement
         const enrollments = yield* enrollmentRepo.findActiveByFriday(fid);
         if (enrollments.length === 0) {
           const cancelResult = transition(updated.state, { kind: "cancel_no_cubes" });
@@ -145,33 +144,28 @@ export const advanceFriday = (fridayId: string) =>
           return updated;
         }
 
-        if (enrollments.length >= 3) {
-          const voteEvent: FridayEvent = {
-            kind: "open_vote",
-            vote: {
-              candidates: enrollments.map(e => e.id) as NonEmptyArray<any>,
-              opensAt: now,
-              closesAt: now, // immediate for testing
-            },
-          };
-          const voteResult = transition(updated.state, voteEvent);
-          if (isOk(voteResult)) {
-            updated = { ...updated, state: voteResult.value };
-            yield* fridayRepo.update(updated);
-            yield* logger.info("Vote opened", { fridayId, candidates: enrollments.length });
-          }
-        } else {
-          // ≤2 enrollments: skip vote, all are winners
-          const skipEvent: FridayEvent = {
-            kind: "skip_vote",
-            winners: enrollments.map(e => e.id) as NonEmptyArray<any>,
-          };
-          const skipResult = transition(updated.state, skipEvent);
-          if (isOk(skipResult)) {
-            updated = { ...updated, state: skipResult.value };
-            yield* fridayRepo.update(updated);
-            yield* logger.info("Vote skipped (≤2 cubes)", { fridayId });
-          }
+        // Always pick the single least-recently-played cube. Voting is no
+        // longer used — the algorithm is deterministic. Other enrollment
+        // hosts are emailed asking them to bring their cube as backup in
+        // case we fire a second pod on the night.
+        const cubes = yield* cubeRepo.findMany(enrollments.map(e => e.cubeId));
+        const sorted = sortEnrollmentsByRecency(enrollments, cubes);
+        const winner = sorted[0]!;
+        const backups = sorted.slice(1);
+        const skipEvent: FridayEvent = {
+          kind: "skip_vote",
+          winners: [winner.id] as NonEmptyArray<any>,
+        };
+        const skipResult = transition(updated.state, skipEvent);
+        if (isOk(skipResult)) {
+          updated = { ...updated, state: skipResult.value };
+          yield* fridayRepo.update(updated);
+          yield* logger.info("Cube picked by recency", {
+            fridayId, winnerCubeId: winner.cubeId, backups: backups.length,
+          });
+        }
+        if (backups.length > 0) {
+          yield* sendBackupHostEmails(friday.date, winner, backups, cubes, userRepo);
         }
         return updated;
       }
@@ -179,9 +173,9 @@ export const advanceFriday = (fridayId: string) =>
       case "enrollment_closed": {
         // Reached if the state machine was parked here without auto-advancing
         // (e.g. an admin used force-state). Mirror the post-close-enrollments
-        // half of the `open` case: count active enrollments and either open
-        // the vote, skip straight to vote_closed, or cancel if there are no
-        // cubes.
+        // half of the `open` case: pick the single least-recently-played
+        // cube, email the other hosts as backups, or cancel if there are no
+        // cubes at all.
         const enrollments = yield* enrollmentRepo.findActiveByFriday(fid);
         if (enrollments.length === 0) {
           const cancelResult = transition(friday.state, { kind: "cancel_no_cubes" });
@@ -193,34 +187,25 @@ export const advanceFriday = (fridayId: string) =>
           return updated!;
         }
 
-        if (enrollments.length >= 3) {
-          const voteEvent: FridayEvent = {
-            kind: "open_vote",
-            vote: {
-              candidates: enrollments.map(e => e.id) as NonEmptyArray<any>,
-              opensAt: now,
-              closesAt: now,
-            },
-          };
-          const voteResult = transition(friday.state, voteEvent);
-          if (!isOk(voteResult)) {
-            return yield* Effect.fail<FridayLifecycleError>({ kind: "transition_failed", message: voteResult.error.message });
-          }
-          updated = { ...friday, state: voteResult.value };
-          yield* fridayRepo.update(updated);
-          yield* logger.info("Vote opened (from enrollment_closed)", { fridayId, candidates: enrollments.length });
-        } else {
-          const skipEvent: FridayEvent = {
-            kind: "skip_vote",
-            winners: enrollments.map(e => e.id) as NonEmptyArray<any>,
-          };
-          const skipResult = transition(friday.state, skipEvent);
-          if (!isOk(skipResult)) {
-            return yield* Effect.fail<FridayLifecycleError>({ kind: "transition_failed", message: skipResult.error.message });
-          }
-          updated = { ...friday, state: skipResult.value };
-          yield* fridayRepo.update(updated);
-          yield* logger.info("Vote skipped from enrollment_closed (≤2 cubes)", { fridayId });
+        const cubes = yield* cubeRepo.findMany(enrollments.map(e => e.cubeId));
+        const sorted = sortEnrollmentsByRecency(enrollments, cubes);
+        const winner = sorted[0]!;
+        const backups = sorted.slice(1);
+        const skipEvent: FridayEvent = {
+          kind: "skip_vote",
+          winners: [winner.id] as NonEmptyArray<any>,
+        };
+        const skipResult = transition(friday.state, skipEvent);
+        if (!isOk(skipResult)) {
+          return yield* Effect.fail<FridayLifecycleError>({ kind: "transition_failed", message: skipResult.error.message });
+        }
+        updated = { ...friday, state: skipResult.value };
+        yield* fridayRepo.update(updated);
+        yield* logger.info("Cube picked by recency (from enrollment_closed)", {
+          fridayId, winnerCubeId: winner.cubeId, backups: backups.length,
+        });
+        if (backups.length > 0) {
+          yield* sendBackupHostEmails(friday.date, winner, backups, cubes, userRepo);
         }
         return updated;
       }
@@ -360,9 +345,32 @@ export const advanceFriday = (fridayId: string) =>
       }
 
       case "in_progress": {
-        // Check if all pods are complete
+        // Check if all pods are complete. Self-heal pod state from rounds:
+        // admin paths (e.g. POST /api/admin/rounds/:id/complete) can mark
+        // every round complete without touching the pod row, leaving the pod
+        // stuck in "playing" and silently blocking advance. If every round
+        // of a non-cancelled pod is complete, promote the pod to "complete"
+        // here so the Friday can finish.
         const pods = yield* podRepo.findByFriday(fid);
-        const allComplete = pods.every(p => p.state === "complete" || p.state === "cancelled");
+        const podStates = new Map<string, string>();
+        for (const p of pods) {
+          if (p.state === "complete" || p.state === "cancelled") {
+            podStates.set(p.id as string, p.state);
+            continue;
+          }
+          const rounds = yield* roundRepo.findByPod(p.id);
+          if (rounds.length > 0 && rounds.every(r => r.state === "complete")) {
+            yield* podRepo.updateState(p.id, "complete");
+            yield* logger.info("Pod promoted to complete (all rounds done)", { podId: p.id });
+            podStates.set(p.id as string, "complete");
+          } else {
+            podStates.set(p.id as string, p.state);
+          }
+        }
+        const allComplete = pods.every(p => {
+          const s = podStates.get(p.id as string) ?? p.state;
+          return s === "complete" || s === "cancelled";
+        });
         if (!allComplete) {
           yield* logger.info("Friday still in progress — not all pods complete", { fridayId });
           return friday;
@@ -549,25 +557,84 @@ function makeTemplate(pod: PlannedPod): PairingsTemplate {
 }
 
 /**
- * Select up to 2 winners by least recently played.
- * Cubes that have never been played sort first (oldest).
- * Alphabetical tiebreaker on cube name.
+ * Sort enrollments by least-recently-played cube. Cubes that have never been
+ * played sort first (oldest). Alphabetical tiebreaker on cube name.
+ */
+function sortEnrollmentsByRecency(
+  enrollments: ReadonlyArray<Enrollment>,
+  cubes: ReadonlyArray<Cube>,
+): ReadonlyArray<Enrollment> {
+  return [...enrollments].sort((a, b) => {
+    const cubeA = cubes.find(c => c.id === a.cubeId);
+    const cubeB = cubes.find(c => c.id === b.cubeId);
+    const lastA = cubeA?.lastRunAt ? Date.parse(cubeA.lastRunAt) : 0;
+    const lastB = cubeB?.lastRunAt ? Date.parse(cubeB.lastRunAt) : 0;
+    if (lastA !== lastB) return lastA - lastB;
+    return (cubeA?.name ?? "").localeCompare(cubeB?.name ?? "");
+  });
+}
+
+/**
+ * @deprecated kept for the vote_open IRV-fallback path; new flows pick a
+ * single winner via sortEnrollmentsByRecency.
  */
 function selectByRecency(
   enrollments: ReadonlyArray<Enrollment>,
   cubes: ReadonlyArray<Cube>,
 ): NonEmptyArray<any> {
-  const sorted = [...enrollments].sort((a, b) => {
-    const cubeA = cubes.find(c => c.id === a.cubeId);
-    const cubeB = cubes.find(c => c.id === b.cubeId);
-    // Never played = epoch 0 (sorts first = least recent)
-    const lastA = cubeA?.lastRunAt ? Date.parse(cubeA.lastRunAt) : 0;
-    const lastB = cubeB?.lastRunAt ? Date.parse(cubeB.lastRunAt) : 0;
-    if (lastA !== lastB) return lastA - lastB; // least recent first
-    // Alphabetical tiebreaker
-    return (cubeA?.name ?? "").localeCompare(cubeB?.name ?? "");
+  return sortEnrollmentsByRecency(enrollments, cubes).slice(0, 2).map(e => e.id) as NonEmptyArray<any>;
+}
+
+/**
+ * Email each backup-cube host asking them to bring their cube along in case
+ * a second pod fires. Best-effort: a failed send is logged and swallowed so
+ * we don't block the lifecycle transition.
+ */
+function sendBackupHostEmails(
+  fridayDate: string,
+  winner: Enrollment,
+  backups: ReadonlyArray<Enrollment>,
+  cubes: ReadonlyArray<Cube>,
+  userRepo: ReturnType<typeof UserRepo extends { Service: infer S } ? () => S : never>,
+) {
+  return Effect.gen(function* () {
+    const logger = yield* Logger;
+    const winnerCube = cubes.find(c => c.id === winner.cubeId);
+    const winnerCubeName = winnerCube?.name ?? "the picked cube";
+
+    const scheduler = yield* Effect.tryPromise({
+      try: () => import("../scheduler.js"),
+      catch: (e) => ({ kind: "import_failed" as const, cause: e }),
+    }).pipe(Effect.catchAll(() => Effect.succeed(null)));
+    const tmpl = yield* Effect.tryPromise({
+      try: () => import("../email-templates.js"),
+      catch: (e) => ({ kind: "import_failed" as const, cause: e }),
+    }).pipe(Effect.catchAll(() => Effect.succeed(null)));
+    if (!scheduler || !tmpl) {
+      yield* logger.warn("Backup host emails skipped: helper modules unavailable", {});
+      return;
+    }
+
+    for (const enr of backups) {
+      const host = yield* (userRepo as any).findById(enr.hostId);
+      if (!host || !host.email) continue;
+      const ownCube = cubes.find(c => c.id === enr.cubeId);
+      const rendered = tmpl.renderEmail("backup_cube_host", {
+        displayName: host.displayName,
+        date: fridayDate,
+        cubeNames: winnerCubeName,
+        appUrl: scheduler.appUrl(),
+        ownCubeName: ownCube?.name ?? "your cube",
+        winningCubeName: winnerCubeName,
+      });
+      yield* Effect.tryPromise({
+        try: () => scheduler.sendEmail(host.email, rendered.subject, rendered.body),
+        catch: (e) => ({ kind: "email_failed" as const, cause: e }),
+      }).pipe(Effect.catchAll((err) =>
+        logger.warn("Backup host email failed", { hostId: enr.hostId, err }),
+      ));
+    }
   });
-  return sorted.slice(0, 2).map(e => e.id) as NonEmptyArray<any>;
 }
 
 function assignTeam(seatIndex: number, format: DraftFormat) {

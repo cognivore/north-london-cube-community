@@ -66,16 +66,6 @@ export async function action({ request }: { request: Request }) {
     return { success: "Friday cancelled." };
   }
 
-  if (intent === "open-friday") {
-    const fridayId = formData.get("fridayId") as string;
-    const res = await fetch(`${API_BASE}/api/lifecycle/fridays/${fridayId}/advance`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", ...ch },
-    });
-    if (!res.ok) return { error: "Failed to open Friday" };
-    return { success: "Friday opened!" };
-  }
-
   return null;
 }
 
@@ -187,14 +177,7 @@ function FridayCard({ friday, compact, isCoordinator }: { friday: any; compact?:
 
       {/* Coordinator actions */}
       {isCoordinator && !isCancelled && friday.state.kind !== "complete" && (
-        <div className="mt-2 flex items-center justify-between border-t border-rule pt-2">
-          <Form method="post">
-            <input type="hidden" name="intent" value="open-friday" />
-            <input type="hidden" name="fridayId" value={friday.id} />
-            <button type="submit" className="text-xs text-dci-teal underline">
-              {advanceLabel(friday.state.kind)}
-            </button>
-          </Form>
+        <div className="mt-2 flex items-center justify-end border-t border-rule pt-2">
           <Form method="post">
             <input type="hidden" name="intent" value="cancel-friday" />
             <input type="hidden" name="fridayId" value={friday.id} />
@@ -204,20 +187,6 @@ function FridayCard({ friday, compact, isCoordinator }: { friday: any; compact?:
       )}
     </div>
   );
-}
-
-function advanceLabel(state: string): string {
-  switch (state) {
-    case "scheduled": return "Open for RSVPs";
-    case "open": return "Close enrollment (Wed 12:00)";
-    case "enrollment_closed": return "Evaluate cubes / open vote";
-    case "vote_open": return "Close vote (Wed 20:00)";
-    case "vote_closed": return "Lock pods (Thu)";
-    case "locked": return "Confirm pods";
-    case "confirmed": return "Start event (Fri 19:00)";
-    case "in_progress": return "Complete event";
-    default: return "Advance →";
-  }
 }
 
 function StateChip({ state }: { state: string }) {

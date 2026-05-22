@@ -14,7 +14,8 @@ export type EmailKind =
   | "morning_pending"
   | "afternoon"
   | "uncancel"
-  | "covered_coordinator";
+  | "covered_coordinator"
+  | "backup_cube_host";
 
 export type EmailContext = {
   readonly displayName: string;
@@ -23,6 +24,8 @@ export type EmailContext = {
   readonly appUrl: string;
   readonly rsvpTime?: string;     // for "lock" — friendly RSVP timestamp
   readonly coveredCount?: number; // for "covered_coordinator"
+  readonly ownCubeName?: string;  // for "backup_cube_host" — the host's own cube
+  readonly winningCubeName?: string; // for "backup_cube_host" — the cube chosen as primary
 };
 
 export type RenderedEmail = {
@@ -82,6 +85,12 @@ export function renderEmail(kind: EmailKind, ctx: EmailContext): RenderedEmail {
         body: `${n} attendee${plural} for ${ctx.date} need${n === 1 ? "s" : ""} entry covered.\n\nDefault: split evenly among other attendees.\nNo names shown — anonymous.`,
       };
     }
+
+    case "backup_cube_host":
+      return {
+        subject: `Bring "${ctx.ownCubeName ?? "your cube"}" as backup for ${ctx.date}`,
+        body: `Hi ${ctx.displayName},\n\nThanks for enrolling ${ctx.ownCubeName ?? "your cube"} for Friday ${ctx.date}.\n\nThe primary cube this week is "${ctx.winningCubeName ?? "TBD"}" — least recently played, so it gets the first pod.\n\nIf we get enough players for a second pod, we'd love to fire ${ctx.ownCubeName ?? "your cube"} too. Please bring it along just in case — no commitment to fire, just having it ready makes the call easy on the night.\n\nDoors: 18:30 | P1P1: 18:45\n\n${ctx.appUrl}\n\n— Cubehall`,
+      };
   }
 }
 
@@ -94,6 +103,7 @@ export const ALL_EMAIL_KINDS: ReadonlyArray<EmailKind> = [
   "afternoon",
   "uncancel",
   "covered_coordinator",
+  "backup_cube_host",
 ];
 
 /**
@@ -110,5 +120,6 @@ export function describeEmail(kind: EmailKind): string {
     case "afternoon":         return "Friday 16:30 London — \"get out of the office\" nudge to locked players.";
     case "uncancel":          return "When admin uncancels a Friday — sent to every player with a live RSVP.";
     case "covered_coordinator": return "When a player marks their RSVP as covered — sent to all coordinators.";
+    case "backup_cube_host":  return "When enrollments close — sent to each host whose cube wasn't picked, asking them to bring it as backup.";
   }
 }

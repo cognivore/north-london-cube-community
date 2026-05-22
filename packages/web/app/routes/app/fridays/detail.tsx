@@ -70,26 +70,6 @@ export async function action({ request, params }: { request: Request; params: { 
     return { success: "Enrollment withdrawn" };
   }
 
-  if (intent === "vote") {
-    const ranking = formData.getAll("ranking") as string[];
-    const result = await api.vote(params.fridayId, ranking, ch);
-    if (!result.ok) return { error: result.error.message };
-    return { success: "Vote submitted!" };
-  }
-
-  if (intent === "advance") {
-    const API_BASE = SERVER_API_BASE;
-    const res = await fetch(`${API_BASE}/api/lifecycle/fridays/${params.fridayId}/advance`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", ...cookieHeader(request) },
-    });
-    if (!res.ok) {
-      const body = await res.json().catch(() => ({}));
-      return { error: body?.error?.message ?? `Advance failed (${res.status})` };
-    }
-    return { success: "Friday advanced!" };
-  }
-
   return null;
 }
 
@@ -101,7 +81,6 @@ export default function FridayDetail() {
   const stateKind = friday.state.kind;
   const canRsvp = ["open", "enrollment_closed", "vote_open", "vote_closed"].includes(stateKind);
   const canEnroll = stateKind === "open";
-  const canVote = stateKind === "vote_open";
   const activeRsvps = rsvps.filter((r: any) => ["pending", "confirmed", "locked", "seated"].includes(r.state));
   const activeEnrollments = enrollments.filter((e: any) => !e.withdrawn);
 
@@ -124,26 +103,11 @@ export default function FridayDetail() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-ink">{formatted}</h1>
-          <p className="mt-1 text-sm">
-            <StateChip state={stateKind} />
-          </p>
-        </div>
-
-        {/* Advance button for hosts/admin — dev tool */}
-        {!["complete", "cancelled"].includes(stateKind) && (
-          <Form method="post">
-            <input type="hidden" name="intent" value="advance" />
-            <button
-              type="submit"
-              className="rounded-sm border border-rule-heavy px-3 py-1.5 text-xs text-ink-faint hover:border-rule-heavy hover:text-ink"
-            >
-              Advance &rarr;
-            </button>
-          </Form>
-        )}
+      <div>
+        <h1 className="text-2xl font-bold text-ink">{formatted}</h1>
+        <p className="mt-1 text-sm">
+          <StateChip state={stateKind} />
+        </p>
       </div>
 
       {/* Feedback */}
@@ -262,22 +226,34 @@ export default function FridayDetail() {
               const cube = allCubes.find((c: any) => c.id === e.cubeId);
               const isMyEnrollment = e.hostId === currentUser?.id;
               return (
-                <div key={e.id} className="flex items-center justify-between rounded-sm bg-paper-sunken px-3 py-2">
-                  <div>
+                <div key={e.id} className="flex items-center justify-between gap-3 rounded-sm bg-paper-sunken px-3 py-2">
+                  <div className="min-w-0">
                     <p className="font-medium text-ink">{cube?.name ?? "Unknown cube"}</p>
                     <p className="text-xs text-ink-faint">
                       {cube?.supportedFormats?.join(", ")} | {cube?.cardCount} cards
                     </p>
                   </div>
-                  {isMyEnrollment && canEnroll && (
-                    <Form method="post">
-                      <input type="hidden" name="intent" value="withdraw" />
-                      <input type="hidden" name="enrollmentId" value={e.id} />
-                      <button type="submit" className="text-xs text-warn hover:text-warn">
-                        Withdraw
-                      </button>
-                    </Form>
-                  )}
+                  <div className="flex items-center gap-3 shrink-0">
+                    {cube?.cubecobraUrl && (
+                      <a
+                        href={cube.cubecobraUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-xs text-dci-teal underline hover:text-dci-teal"
+                      >
+                        open on CubeCobra
+                      </a>
+                    )}
+                    {isMyEnrollment && canEnroll && (
+                      <Form method="post">
+                        <input type="hidden" name="intent" value="withdraw" />
+                        <input type="hidden" name="enrollmentId" value={e.id} />
+                        <button type="submit" className="text-xs text-warn hover:text-warn">
+                          Withdraw
+                        </button>
+                      </Form>
+                    )}
+                  </div>
                 </div>
               );
             })}
@@ -309,35 +285,6 @@ export default function FridayDetail() {
           </p>
         )}
       </section>
-
-      {/* Vote section */}
-      {canVote && activeEnrollments.length >= 3 && (
-        <section className="rounded-sm border border-dci-teal bg-dci-teal-soft p-4">
-          <h2 className="text-lg font-semibold text-ink">Vote (optional)</h2>
-          <p className="mt-1 text-sm text-ink-faint">
-            Have a strong preference? Rank the cubes. Otherwise, the least
-            recently played cubes will be selected automatically.
-          </p>
-          <Form method="post" className="mt-3 space-y-2">
-            <input type="hidden" name="intent" value="vote" />
-            {activeEnrollments.map((e: any) => {
-              const cube = allCubes.find((c: any) => c.id === e.cubeId);
-              return (
-                <label key={e.id} className="flex items-center gap-3 rounded-sm bg-paper px-3 py-2">
-                  <input type="checkbox" name="ranking" value={e.id} className="rounded" />
-                  <span className="text-ink">{cube?.name ?? e.cubeId.slice(0, 8)}</span>
-                </label>
-              );
-            })}
-            <button
-              type="submit"
-              className="w-full rounded-sm border border-dci-teal bg-paper py-2.5 font-semibold text-dci-teal hover:bg-paper-alt min-h-[44px]"
-            >
-              Submit vote
-            </button>
-          </Form>
-        </section>
-      )}
 
       {/* Pods */}
       {pods.length > 0 && (
