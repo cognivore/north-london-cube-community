@@ -209,7 +209,7 @@ export default function AdminUsers() {
                           const form = e.currentTarget as HTMLFormElement;
                           const sel = form.querySelector<HTMLSelectElement>('select[name="targetId"]');
                           const targetLabel = sel?.options[sel.selectedIndex]?.text ?? "target";
-                          if (!confirm(`Merge ${u.displayName} (${u.email}) → ${targetLabel}?\n\nThis reassigns all of this account's data to the target and deletes this account. Cannot be undone.`)) {
+                          if (!confirm(`Merge ${u.displayName} (${u.email}) → ${targetLabel}?\n\nReassigns all of this account's data to the target and marks this account as merged (hidden from listings, blocked from login). Revertible from the Merged accounts panel.`)) {
                             e.preventDefault();
                           }
                         }}
@@ -254,8 +254,10 @@ export default function AdminUsers() {
                         </div>
                         <p className="text-xs text-ink-faint">
                           Reassigns all RSVPs, cubes, enrollments, seats, matches, etc.
-                          on the source to the target, then deletes the source.
-                          Same-Friday conflicts on RSVPs/votes are resolved in the target's favour.
+                          on the source to the target, then marks the source as
+                          merged (hidden, login blocked). Revertible from the
+                          Merged accounts panel below. Same-Friday conflicts on
+                          RSVPs/votes are resolved in the target's favour.
                         </p>
                       </Form>
                     </td>
