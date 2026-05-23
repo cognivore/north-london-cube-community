@@ -185,6 +185,12 @@ export const login = (input: { email: string }) =>
     if (user.authState.kind === "suspended") {
       return yield* Effect.fail<AuthError>({ kind: "user_suspended" });
     }
+    if (user.authState.kind === "merged") {
+      // The account was folded into another by a coordinator. Refusing here
+      // forces the player to log in with the canonical email instead of
+      // resurrecting a placeholder via magic link.
+      return yield* Effect.fail<AuthError>({ kind: "user_not_found" });
+    }
 
     // Generate a new challenge token for magic link
     const now = yield* clock.now();

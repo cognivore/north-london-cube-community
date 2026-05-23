@@ -7,25 +7,33 @@ type AdminUser = {
   email: string;
   createdAt: string;
   role: string;
+  authKind?: string;
+};
+
+type AdminMerge = {
+  id: string;
+  source: { id: string; displayName?: string; email?: string };
+  target: { id: string; displayName?: string; email?: string };
+  performedBy: string;
+  performedAt: string;
+  revertedAt: string | null;
+  revertedBy: string | null;
 };
 
 export async function loader({ request }: { request: Request }) {
-  const res = await fetch(`${SERVER_API_BASE}/api/admin/users`, {
-    headers: cookieHeader(request),
-  });
-  if (!res.ok) return { users: [] as AdminUser[] };
-  const body = (await res.json()) as {
-    users: Array<{ id: string; displayName: string; email: string; createdAt: string; role: string }>;
-  };
-  const users: AdminUser[] = body.users.map((u) => ({
-    id: u.id,
-    displayName: u.displayName,
-    email: u.email,
-    createdAt: u.createdAt,
-    role: u.role,
-  }));
+  const ch = { headers: cookieHeader(request) };
+  const [usersRes, mergesRes] = await Promise.all([
+    fetch(`${SERVER_API_BASE}/api/admin/users`, ch),
+    fetch(`${SERVER_API_BASE}/api/admin/user-merges?status=active`, ch),
+  ]);
+  const users: AdminUser[] = usersRes.ok
+    ? ((await usersRes.json()) as { users: AdminUser[] }).users
+    : [];
   users.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-  return { users };
+  const merges: AdminMerge[] = mergesRes.ok
+    ? ((await mergesRes.json()) as { merges: AdminMerge[] }).merges
+    : [];
+  return { users, merges };
 }
 
 export async function action({ request }: { request: Request }) {
@@ -73,14 +81,28 @@ export async function action({ request }: { request: Request }) {
       .filter(([, n]) => (n as number) > 0)
       .map(([k, n]) => `${k}: ${n}`)
       .join(", ");
-    return { success: summary ? `Merged. Moved ${summary}.` : "Merged. (no attached rows)" };
+    return { success: summary ? `Merged. Moved ${summary}. Revertible from the Merged accounts panel.` : "Merged. (no attached rows)" };
+  }
+
+  if (intent === "revert-merge") {
+    const mergeId = formData.get("mergeId") as string;
+    if (!mergeId) return { error: "Missing mergeId" };
+    const res = await fetch(
+      `${SERVER_API_BASE}/api/admin/user-merges/${mergeId}/revert`,
+      { method: "POST", headers: { "Content-Type": "application/json", ...ch } },
+    );
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      return { error: body?.error?.message ?? `Revert failed (${res.status})` };
+    }
+    return { success: "Merge reverted. Source account restored." };
   }
 
   return null;
 }
 
 export default function AdminUsers() {
-  const { users } = useLoaderData<typeof loader>();
+  const { users, merges } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
   const [params, setParams] = useSearchParams();
   const editingId = params.get("edit");
@@ -286,6 +308,65 @@ export default function AdminUsers() {
             </tbody>
           </table>
         </div>
+      )}
+
+      {merges.length > 0 && (
+        <section className="space-y-2">
+          <h2 className="text-lg font-semibold text-ink">Merged accounts</h2>
+          <p className="text-xs text-ink-faint">
+            Merges are recorded so they can be reverted. The source's history
+            has been reattributed to the target; revert restores it.
+          </p>
+          <div className="overflow-x-auto rounded-sm bg-paper-alt">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-ink-faint/20 text-left text-ink-soft">
+                  <th className="px-3 py-2 font-medium">Source (merged)</th>
+                  <th className="px-3 py-2 font-medium">Target</th>
+                  <th className="px-3 py-2 font-medium">When</th>
+                  <th className="px-3 py-2 font-medium"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {merges.map((m) => (
+                  <tr key={m.id} className="border-b border-ink-faint/10 last:border-0">
+                    <td className="px-3 py-2 text-ink">
+                      {m.source.displayName ?? m.source.id.slice(0, 8)}
+                      <div className="text-xs text-ink-faint">{m.source.email}</div>
+                    </td>
+                    <td className="px-3 py-2 text-ink">
+                      {m.target.displayName ?? m.target.id.slice(0, 8)}
+                      <div className="text-xs text-ink-faint">{m.target.email}</div>
+                    </td>
+                    <td className="px-3 py-2 text-ink-soft" data-mono>
+                      {m.performedAt.slice(0, 16).replace("T", " ")}
+                    </td>
+                    <td className="px-3 py-2 text-right">
+                      <Form
+                        method="post"
+                        className="inline-block"
+                        onSubmit={(e) => {
+                          if (!confirm(`Revert this merge?\n\n${m.source.displayName ?? m.source.id} will be restored as a separate account; rows reassigned during the merge will move back.`)) {
+                            e.preventDefault();
+                          }
+                        }}
+                      >
+                        <input type="hidden" name="intent" value="revert-merge" />
+                        <input type="hidden" name="mergeId" value={m.id} />
+                        <button
+                          type="submit"
+                          className="rounded-sm border border-warn bg-paper px-3 py-1 text-xs text-warn hover:bg-warn-soft"
+                        >
+                          revert
+                        </button>
+                      </Form>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
       )}
     </div>
   );

@@ -985,32 +985,46 @@ admin.get("/fridays", async (c) => {
   }
 });
 
-// GET /api/admin/users — list users for admin pickers (returns id, displayName, email, createdAt, role)
+// GET /api/admin/users — list users for admin pickers.
+// Merged sources are excluded by default; pass ?includeMerged=1 to surface
+// them (the admin UI uses this to render the "Merged accounts" section).
 admin.get("/users", async (c) => {
   const q = c.req.query("q") ?? "";
+  const includeMerged = c.req.query("includeMerged") === "1";
   try {
     const db = await getDb();
-    type Row = { id: string; display_name: string; email: string; created_at: string; role: string };
+    type Row = { id: string; display_name: string; email: string; created_at: string; role: string; auth_state: string };
     let rows: Row[];
     if (q.length > 0) {
       const pattern = `%${q}%`;
       rows = dbQuery<Row>(db,
-        `SELECT id, display_name, email, created_at, role FROM users
+        `SELECT id, display_name, email, created_at, role, auth_state FROM users
          WHERE id != ? AND (display_name LIKE ? OR email LIKE ?)
          ORDER BY display_name LIMIT 50`, [BYE_USER_ID, pattern, pattern]);
     } else {
       rows = dbQuery<Row>(db,
-        `SELECT id, display_name, email, created_at, role FROM users
+        `SELECT id, display_name, email, created_at, role, auth_state FROM users
          WHERE id != ? ORDER BY display_name LIMIT 500`, [BYE_USER_ID]);
     }
+    const visible = includeMerged ? rows : rows.filter(r => {
+      try { return (JSON.parse(r.auth_state) as { kind: string }).kind !== "merged"; }
+      catch { return true; }
+    });
     return c.json({
-      users: rows.map(r => ({
-        id: r.id,
-        displayName: r.display_name,
-        email: r.email,
-        createdAt: r.created_at,
-        role: r.role,
-      })),
+      users: visible.map(r => {
+        const authKind = (() => {
+          try { return (JSON.parse(r.auth_state) as { kind: string }).kind; }
+          catch { return "unknown"; }
+        })();
+        return {
+          id: r.id,
+          displayName: r.display_name,
+          email: r.email,
+          createdAt: r.created_at,
+          role: r.role,
+          authKind,
+        };
+      }),
     });
   } catch (e) {
     return apiError(c, 500, "INTERNAL", `Failed to list users: ${e instanceof Error ? e.message : String(e)}`);
@@ -1540,15 +1554,38 @@ admin.get("/audit", async (c) => {
   }
 });
 
-// POST /api/admin/users/:srcId/merge-into/:tgtId — fold a source user (typically
-// a placeholder *@*.local walk-in account) into a target user. All FK-bearing
-// rows (rsvps, cubes, enrollments, votes, pods, seats, matches, audit_events)
-// are reassigned to the target. UNIQUE(friday_id, user_id) constraints on
-// rsvps and votes are resolved by keeping the target's row and dropping the
-// source's conflicting one. The source's noShowCount is summed into the
-// target. Sessions belonging to the source are deleted; the source user row
-// is deleted last. An audit event records the merge with before/after
-// summary for traceability.
+// ----- User merge (reversible) ----------------------------------------------
+//
+// The merge is structured as a recorded set of changes, not a destructive
+// rewrite. Source's row stays in `users` with authState = merged, and every
+// UPDATE / DELETE we performed is captured in `user_merges.changes` so that
+// a coordinator can replay the operation in reverse if it was a mistake.
+//
+// What the merge does:
+//   - For each FK row pointing at the source, UPDATE the FK to point at the
+//     target. The original value is recorded in the changes log.
+//   - For UNIQUE(friday_id, user_id) collisions on rsvps and votes, the
+//     source's row is DELETE'd (target's wins, richer state). The full row
+//     JSON is recorded in the changes log so revert can re-INSERT.
+//   - noShowCount is summed into target.profile; the source's value is kept
+//     unchanged so a revert can restore by subtraction.
+//   - Source's sessions are deleted (no semantic value).
+//   - Source's authState is set to {kind: "merged", mergedInto, mergedAt}.
+//     The previous authState is captured for revert.
+//
+// We deliberately do NOT duplicate match/seat rows onto the target. Doing so
+// would double-count standings, which is worse than the alternative (a
+// merged source whose history is reattributed). The reversibility goal is
+// satisfied by the changes log, not by copying.
+
+type MergeChange =
+  | { kind: "update"; table: string; rowId: string; column: string; from: string }
+  | { kind: "delete"; table: string; rowJson: string }
+  | { kind: "user_field"; field: "auth_state" | "profile"; userId: string; from: string };
+
+type MergeChangeLog = ReadonlyArray<MergeChange>;
+
+// POST /api/admin/users/:srcId/merge-into/:tgtId
 admin.post("/users/:srcId/merge-into/:tgtId", async (c) => {
   const actor = c.get("user");
   const srcId = c.req.param("srcId")!;
@@ -1564,8 +1601,8 @@ admin.post("/users/:srcId/merge-into/:tgtId", async (c) => {
   try {
     const db = await getDb();
     const src = dbQuery<{
-      id: string; email: string; display_name: string; role: string; profile: string;
-    }>(db, "SELECT id, email, display_name, role, profile FROM users WHERE id = ?", [srcId])[0];
+      id: string; email: string; display_name: string; role: string; profile: string; auth_state: string;
+    }>(db, "SELECT id, email, display_name, role, profile, auth_state FROM users WHERE id = ?", [srcId])[0];
     const tgt = dbQuery<{
       id: string; email: string; display_name: string; role: string; profile: string;
     }>(db, "SELECT id, email, display_name, role, profile FROM users WHERE id = ?", [tgtId])[0];
@@ -1576,51 +1613,74 @@ admin.post("/users/:srcId/merge-into/:tgtId", async (c) => {
       return apiError(c, 403, "FORBIDDEN", "Refusing to merge a coordinator account; demote first");
     }
 
-    // Count what we're about to move, before we mutate. Used for the audit
-    // payload and the response so the caller can sanity-check the merge.
-    const counts = {
-      rsvps:          countWhere(db, "rsvps",       "user_id = ?",    [srcId]),
-      cubes:          countWhere(db, "cubes",       "owner_id = ?",   [srcId]),
-      enrollments:    countWhere(db, "enrollments", "host_id = ?",    [srcId]),
-      votes:          countWhere(db, "votes",       "user_id = ?",    [srcId]),
-      pods:           countWhere(db, "pods",        "host_id = ?",    [srcId]),
-      seats:          countWhere(db, "seats",       "user_id = ?",    [srcId]),
-      matches_p1:     countWhere(db, "matches",     "player1_id = ?", [srcId]),
-      matches_p2:     countWhere(db, "matches",     "player2_id = ?", [srcId]),
-      audit_actor:    countWhere(db, "audit_events","actor_id = ?",   [srcId]),
-      sessions:       countWhere(db, "sessions",    "user_id = ?",    [srcId]),
-    };
+    // Refuse to re-merge an already-merged source.
+    const srcAuth = JSON.parse(src.auth_state) as { kind: string };
+    if (srcAuth.kind === "merged") {
+      return apiError(c, 409, "ALREADY_MERGED", "Source user is already merged");
+    }
 
-    // Conflict resolution for tables with UNIQUE(friday_id, user_id): if the
-    // target already has a row for the same friday, keep the target's row
-    // (richer state — locked > pending etc.) and drop the source's. Otherwise
-    // simply reassign user_id.
-    const droppedRsvps = dbQuery<{ id: string }>(db,
-      `SELECT r1.id FROM rsvps r1
+    const changes: MergeChange[] = [];
+
+    // --- rsvps: UNIQUE(friday_id, user_id). Drop source's row when target has one.
+    const rsvpDeleteRows = dbQuery<{
+      id: string; friday_id: string; user_id: string; state: string;
+      created_at: string; last_transition_at: string; covered: number | null;
+    }>(db,
+      `SELECT r1.* FROM rsvps r1
        WHERE r1.user_id = ?
          AND EXISTS (SELECT 1 FROM rsvps r2 WHERE r2.user_id = ? AND r2.friday_id = r1.friday_id)`,
       [srcId, tgtId]);
-    for (const r of droppedRsvps) dbRun(db, "DELETE FROM rsvps WHERE id = ?", [r.id]);
+    for (const row of rsvpDeleteRows) {
+      changes.push({ kind: "delete", table: "rsvps", rowJson: JSON.stringify(row) });
+      dbRun(db, "DELETE FROM rsvps WHERE id = ?", [row.id]);
+    }
+    const rsvpUpdateIds = dbQuery<{ id: string }>(db, "SELECT id FROM rsvps WHERE user_id = ?", [srcId]);
+    for (const r of rsvpUpdateIds) {
+      changes.push({ kind: "update", table: "rsvps", rowId: r.id, column: "user_id", from: srcId });
+    }
     dbRun(db, "UPDATE rsvps SET user_id = ? WHERE user_id = ?", [tgtId, srcId]);
 
-    const droppedVotes = dbQuery<{ id: string }>(db,
-      `SELECT v1.id FROM votes v1
+    // --- votes: UNIQUE(friday_id, user_id). Same treatment.
+    const voteDeleteRows = dbQuery<{ id: string; friday_id: string; user_id: string; ballot: string; submitted_at: string }>(db,
+      `SELECT v1.* FROM votes v1
        WHERE v1.user_id = ?
          AND EXISTS (SELECT 1 FROM votes v2 WHERE v2.user_id = ? AND v2.friday_id = v1.friday_id)`,
       [srcId, tgtId]);
-    for (const v of droppedVotes) dbRun(db, "DELETE FROM votes WHERE id = ?", [v.id]);
+    for (const row of voteDeleteRows) {
+      changes.push({ kind: "delete", table: "votes", rowJson: JSON.stringify(row) });
+      dbRun(db, "DELETE FROM votes WHERE id = ?", [row.id]);
+    }
+    const voteUpdateIds = dbQuery<{ id: string }>(db, "SELECT id FROM votes WHERE user_id = ?", [srcId]);
+    for (const v of voteUpdateIds) {
+      changes.push({ kind: "update", table: "votes", rowId: v.id, column: "user_id", from: srcId });
+    }
     dbRun(db, "UPDATE votes SET user_id = ? WHERE user_id = ?", [tgtId, srcId]);
 
-    // Reassign the rest. No UNIQUE-on-user constraints elsewhere — straight UPDATE.
-    dbRun(db, "UPDATE cubes       SET owner_id   = ? WHERE owner_id   = ?", [tgtId, srcId]);
-    dbRun(db, "UPDATE enrollments SET host_id    = ? WHERE host_id    = ?", [tgtId, srcId]);
-    dbRun(db, "UPDATE pods        SET host_id    = ? WHERE host_id    = ?", [tgtId, srcId]);
-    dbRun(db, "UPDATE seats       SET user_id    = ? WHERE user_id    = ?", [tgtId, srcId]);
-    dbRun(db, "UPDATE matches     SET player1_id = ? WHERE player1_id = ?", [tgtId, srcId]);
-    dbRun(db, "UPDATE matches     SET player2_id = ? WHERE player2_id = ?", [tgtId, srcId]);
-    dbRun(db, "UPDATE audit_events SET actor_id  = ? WHERE actor_id   = ?", [tgtId, srcId]);
+    // --- straight reassignments. Capture before-values per row so revert can
+    //     restore. No UNIQUE-on-user constraints on these tables.
+    const reassign = (table: string, column: string) => {
+      const rows = dbQuery<{ id: string }>(db, `SELECT id FROM ${table} WHERE ${column} = ?`, [srcId]);
+      for (const r of rows) {
+        changes.push({ kind: "update", table, rowId: r.id, column, from: srcId });
+      }
+      dbRun(db, `UPDATE ${table} SET ${column} = ? WHERE ${column} = ?`, [tgtId, srcId]);
+      return rows.length;
+    };
+    const counts = {
+      rsvps:       rsvpUpdateIds.length,
+      droppedRsvps: rsvpDeleteRows.length,
+      votes:       voteUpdateIds.length,
+      droppedVotes: voteDeleteRows.length,
+      cubes:       reassign("cubes",        "owner_id"),
+      enrollments: reassign("enrollments",  "host_id"),
+      pods:        reassign("pods",         "host_id"),
+      seats:       reassign("seats",        "user_id"),
+      matches_p1:  reassign("matches",      "player1_id"),
+      matches_p2:  reassign("matches",      "player2_id"),
+      audit_actor: reassign("audit_events", "actor_id"),
+    };
 
-    // Sum noShowCount into the target.
+    // --- target.profile: sum noShowCount. Capture target's previous profile.
     let mergedProfile = tgt.profile;
     try {
       const srcProfile = JSON.parse(src.profile) as UserProfile;
@@ -1631,18 +1691,34 @@ admin.post("/users/:srcId/merge-into/:tgtId", async (c) => {
         ...tgtProfile,
         noShowCount: unsafeNonNegativeInt(summed) as unknown as number,
       });
+      changes.push({ kind: "user_field", field: "profile", userId: tgtId, from: tgt.profile });
       dbRun(db, "UPDATE users SET profile = ? WHERE id = ?", [mergedProfile, tgtId]);
     } catch {
-      // If either profile JSON is malformed, leave the target's profile untouched.
+      // If either profile JSON is malformed, skip the sum; revert won't need
+      // to restore anything since we didn't write.
     }
 
-    // Sessions never carry semantic value once detached from the user; drop them.
+    // --- sessions: forget. A revert will not restore them.
     dbRun(db, "DELETE FROM sessions WHERE user_id = ?", [srcId]);
 
-    // And the source user row itself.
-    dbRun(db, "DELETE FROM users WHERE id = ?", [srcId]);
+    // --- source's authState: flip to "merged", capture original.
+    const now = new Date().toISOString();
+    const newSrcAuth = JSON.stringify({
+      kind: "merged",
+      mergedInto: tgtId,
+      mergedAt: now,
+    });
+    changes.push({ kind: "user_field", field: "auth_state", userId: srcId, from: src.auth_state });
+    dbRun(db, "UPDATE users SET auth_state = ? WHERE id = ?", [newSrcAuth, srcId]);
 
-    // Audit trail.
+    // --- record the merge so it can be reverted.
+    const mergeId = crypto.randomUUID();
+    dbRun(db,
+      `INSERT INTO user_merges (id, source_user_id, target_user_id, performed_by, performed_at, changes)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      [mergeId, srcId, tgtId, actor.id, now, JSON.stringify(changes)]);
+
+    // --- audit trail.
     const run = c.get("effectRuntime");
     await run(
       Effect.gen(function* () {
@@ -1655,19 +1731,8 @@ admin.post("/users/:srcId/merge-into/:tgtId", async (c) => {
           actorId: actor.id,
           subject: { kind: "user", id: tgtId },
           action: "admin_user_merged",
-          before: {
-            sourceId: srcId,
-            sourceEmail: src.email,
-            sourceDisplayName: src.display_name,
-          },
-          after: {
-            targetId: tgtId,
-            targetEmail: tgt.email,
-            targetDisplayName: tgt.display_name,
-            ...counts,
-            droppedConflictingRsvps: droppedRsvps.length,
-            droppedConflictingVotes: droppedVotes.length,
-          },
+          before: { sourceId: srcId, sourceEmail: src.email, sourceDisplayName: src.display_name },
+          after: { mergeId, targetId: tgtId, targetEmail: tgt.email, ...counts },
         });
       }),
     );
@@ -1676,19 +1741,137 @@ admin.post("/users/:srcId/merge-into/:tgtId", async (c) => {
 
     return c.json({
       ok: true,
+      mergeId,
       target: { id: tgt.id, email: tgt.email, displayName: tgt.display_name },
       moved: counts,
-      droppedConflictingRsvps: droppedRsvps.length,
-      droppedConflictingVotes: droppedVotes.length,
     });
   } catch (e) {
     return apiError(c, 500, "INTERNAL", `Merge failed: ${e instanceof Error ? e.message : String(e)}`);
   }
 });
 
-function countWhere(db: unknown, table: string, where: string, params: ReadonlyArray<unknown>): number {
-  const rows = dbQuery<{ c: number }>(db as any, `SELECT count(*) AS c FROM ${table} WHERE ${where}`, params as any);
-  return rows[0]?.c ?? 0;
-}
+// POST /api/admin/user-merges/:mergeId/revert — replay a merge in reverse.
+// Walks the changes log from newest to oldest, restoring deletes via INSERT
+// and undoing updates by writing the captured `from` value back. Refuses to
+// revert if any of the rows the merge touched have since been deleted (the
+// log can't recover those) — coordinator must hand-stitch.
+admin.post("/user-merges/:mergeId/revert", async (c) => {
+  const actor = c.get("user");
+  const mergeId = c.req.param("mergeId")!;
+
+  try {
+    const db = await getDb();
+    const row = dbQuery<{
+      id: string; source_user_id: string; target_user_id: string;
+      performed_by: string; performed_at: string;
+      reverted_at: string | null; changes: string;
+    }>(db, "SELECT * FROM user_merges WHERE id = ?", [mergeId])[0];
+
+    if (!row) return apiError(c, 404, "NOT_FOUND", "Merge not found");
+    if (row.reverted_at) return apiError(c, 409, "ALREADY_REVERTED", "This merge has already been reverted");
+
+    const changes = JSON.parse(row.changes) as MergeChangeLog;
+
+    // Replay in reverse so the most recent change is undone first.
+    for (let i = changes.length - 1; i >= 0; i--) {
+      const ch = changes[i]!;
+      if (ch.kind === "update") {
+        dbRun(db, `UPDATE ${ch.table} SET ${ch.column} = ? WHERE id = ?`, [ch.from, ch.rowId]);
+      } else if (ch.kind === "delete") {
+        const parsed = JSON.parse(ch.rowJson) as Record<string, unknown>;
+        const cols = Object.keys(parsed);
+        const placeholders = cols.map(() => "?").join(", ");
+        const values = cols.map(k => parsed[k] as any);
+        dbRun(db,
+          `INSERT OR IGNORE INTO ${ch.table} (${cols.join(", ")}) VALUES (${placeholders})`,
+          values);
+      } else if (ch.kind === "user_field") {
+        dbRun(db, `UPDATE users SET ${ch.field} = ? WHERE id = ?`, [ch.from, ch.userId]);
+      }
+    }
+
+    const now = new Date().toISOString();
+    dbRun(db,
+      "UPDATE user_merges SET reverted_at = ?, reverted_by = ? WHERE id = ?",
+      [now, actor.id, mergeId]);
+
+    const runEffect = c.get("effectRuntime");
+    await runEffect(
+      Effect.gen(function* () {
+        const auditRepo = yield* AuditRepo;
+        const rng = yield* RNG;
+        const clock = yield* Clock;
+        yield* auditRepo.create({
+          id: unsafeAuditEventId(yield* rng.uuid()),
+          at: yield* clock.now(),
+          actorId: actor.id,
+          subject: { kind: "user", id: row.source_user_id },
+          action: "admin_user_merge_reverted",
+          before: { mergeId, targetId: row.target_user_id },
+          after: { sourceId: row.source_user_id, restoredChanges: changes.length },
+        });
+      }),
+    );
+
+    dbPersist();
+    return c.json({ ok: true, sourceId: row.source_user_id, restoredChanges: changes.length });
+  } catch (e) {
+    return apiError(c, 500, "INTERNAL", `Revert failed: ${e instanceof Error ? e.message : String(e)}`);
+  }
+});
+
+// GET /api/admin/user-merges — list merges (most recent first), optionally
+// filtered by ?status=active|reverted. Used by the admin UI to surface a
+// list of merged sources with their target and a revert button.
+admin.get("/user-merges", async (c) => {
+  const statusFilter = c.req.query("status");
+  try {
+    const db = await getDb();
+    type Row = {
+      id: string; source_user_id: string; target_user_id: string;
+      performed_by: string; performed_at: string;
+      reverted_at: string | null; reverted_by: string | null;
+    };
+    let rows: Row[];
+    if (statusFilter === "active") {
+      rows = dbQuery<Row>(db,
+        `SELECT id, source_user_id, target_user_id, performed_by, performed_at, reverted_at, reverted_by
+         FROM user_merges WHERE reverted_at IS NULL ORDER BY performed_at DESC LIMIT 500`, []);
+    } else if (statusFilter === "reverted") {
+      rows = dbQuery<Row>(db,
+        `SELECT id, source_user_id, target_user_id, performed_by, performed_at, reverted_at, reverted_by
+         FROM user_merges WHERE reverted_at IS NOT NULL ORDER BY performed_at DESC LIMIT 500`, []);
+    } else {
+      rows = dbQuery<Row>(db,
+        `SELECT id, source_user_id, target_user_id, performed_by, performed_at, reverted_at, reverted_by
+         FROM user_merges ORDER BY performed_at DESC LIMIT 500`, []);
+    }
+
+    // Enrich with display names + emails for source and target.
+    const ids = new Set<string>();
+    for (const r of rows) { ids.add(r.source_user_id); ids.add(r.target_user_id); }
+    const userMap: Record<string, { displayName: string; email: string }> = {};
+    if (ids.size > 0) {
+      const ph = Array.from(ids).map(() => "?").join(", ");
+      const urows = dbQuery<{ id: string; display_name: string; email: string }>(db,
+        `SELECT id, display_name, email FROM users WHERE id IN (${ph})`, Array.from(ids));
+      for (const u of urows) userMap[u.id] = { displayName: u.display_name, email: u.email };
+    }
+
+    return c.json({
+      merges: rows.map(r => ({
+        id: r.id,
+        source: { id: r.source_user_id, ...(userMap[r.source_user_id] ?? {}) },
+        target: { id: r.target_user_id, ...(userMap[r.target_user_id] ?? {}) },
+        performedBy: r.performed_by,
+        performedAt: r.performed_at,
+        revertedAt: r.reverted_at,
+        revertedBy: r.reverted_by,
+      })),
+    });
+  } catch (e) {
+    return apiError(c, 500, "INTERNAL", `Failed to list merges: ${e instanceof Error ? e.message : String(e)}`);
+  }
+});
 
 export { admin };

@@ -16,7 +16,14 @@ import type { DraftFormat, SystemRole } from "./enums.js";
 export type AuthState =
   | { readonly kind: "pending_verification"; readonly challenge: ChallengeToken; readonly expires: ISO8601 }
   | { readonly kind: "verified" }
-  | { readonly kind: "suspended"; readonly reason: string; readonly until: ISO8601 };
+  | { readonly kind: "suspended"; readonly reason: string; readonly until: ISO8601 }
+  /**
+   * Source side of an admin user-merge. The original auth state is captured
+   * in the matching user_merges row so a revert can restore it. While in this
+   * state the user is hidden from normal listings, cannot log in, and their
+   * historical rows have already been reassigned to mergedInto.
+   */
+  | { readonly kind: "merged"; readonly mergedInto: UserId; readonly mergedAt: ISO8601 };
 
 // ---------------------------------------------------------------------------
 // BanState

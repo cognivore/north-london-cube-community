@@ -184,6 +184,23 @@ const SCHEMA = `
     updated_at TEXT NOT NULL
   );
 
+  -- user_merges: an audit log of admin user-merge operations, structured so a
+  -- merge can be replayed in reverse. The changes JSON records every UPDATE
+  -- and DELETE the merge performed (before-values for updates, full row JSON
+  -- for deletes), so a revert can restore the source data exactly.
+  CREATE TABLE IF NOT EXISTS user_merges (
+    id TEXT PRIMARY KEY,
+    source_user_id TEXT NOT NULL,
+    target_user_id TEXT NOT NULL,
+    performed_by TEXT NOT NULL,
+    performed_at TEXT NOT NULL,
+    reverted_at TEXT,
+    reverted_by TEXT,
+    changes TEXT NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS idx_user_merges_source ON user_merges(source_user_id);
+  CREATE INDEX IF NOT EXISTS idx_user_merges_target ON user_merges(target_user_id);
+
   CREATE INDEX IF NOT EXISTS idx_rsvps_friday ON rsvps(friday_id);
   CREATE INDEX IF NOT EXISTS idx_enrollments_friday ON enrollments(friday_id);
   CREATE INDEX IF NOT EXISTS idx_pods_friday ON pods(friday_id);
