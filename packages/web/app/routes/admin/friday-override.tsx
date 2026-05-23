@@ -88,7 +88,7 @@ export default function FridayOverride() {
   const { friday } = data;
   const stateKind = friday.state.kind;
 
-  const canForceLock = ["enrollment_closed", "vote_open", "vote_closed", "locked"].includes(stateKind);
+  const canForceLock = ["open", "locked"].includes(stateKind);
   const canForceComplete = !["complete", "cancelled", "scheduled"].includes(stateKind);
 
   return (
@@ -156,32 +156,12 @@ export default function FridayOverride() {
         </Form>
       )}
 
-      {stateKind === "vote_closed" && (
-        <Form method="post" className="space-y-3 rounded-sm border border-amber bg-paper-alt p-4">
-          <h2 className="text-lg font-semibold text-amber">Reopen vote</h2>
-          <p className="text-sm text-ink-faint">
-            Returns the Friday to <code>vote_open</code>. Existing ballots in the votes
-            table are preserved — advancing again will re-tally with any new votes.
-            Use this if the vote was closed prematurely.
-          </p>
-          <input type="hidden" name="intent" value="set-state" />
-          <input type="hidden" name="target" value="vote_open" />
-          <button
-            type="submit"
-            className="rounded-sm border border-amber bg-paper px-4 py-2.5 font-semibold text-amber hover:bg-paper-alt min-h-[44px]"
-          >
-            Reopen vote
-          </button>
-        </Form>
-      )}
-
       <Form method="post" className="space-y-3 rounded-sm border border-rule-heavy bg-paper-alt p-4">
         <h2 className="text-lg font-semibold text-ink">Force state (bypass machine)</h2>
         <p className="text-sm text-ink-faint">
-          Jump the Friday to any state, forward or backward. State shapes are
-          reconstructed from current enrollments/winners where required. Clears
-          cron-email dedup so reminders can fire again. Does <em>not</em> create
-          or delete pods, RSVPs, or votes — use the dedicated buttons for that.
+          Jump the Friday to any state, forward or backward. Clears cron-email
+          dedup so reminders can fire again. Does <em>not</em> create or delete
+          pods or RSVPs — use the dedicated buttons for that.
         </p>
         <div>
           <label htmlFor="target" className="block text-sm font-medium text-ink-soft">
@@ -197,9 +177,6 @@ export default function FridayOverride() {
             <option value="" disabled>Pick a state…</option>
             <option value="scheduled">scheduled</option>
             <option value="open">open</option>
-            <option value="enrollment_closed">enrollment_closed</option>
-            <option value="vote_open">vote_open</option>
-            <option value="vote_closed">vote_closed</option>
             <option value="locked">locked (no pods created)</option>
             <option value="confirmed">confirmed</option>
             <option value="in_progress">in_progress</option>
@@ -221,9 +198,8 @@ export default function FridayOverride() {
           <h2 className="text-lg font-semibold text-ok">Uncancel Friday</h2>
           <p className="text-sm text-ink-faint">
             Restores the Friday and emails every player with a live RSVP that it&apos;s going ahead.
-            The Friday returns to <code>locked</code> if pods already exist, <code>enrollment_closed</code>{" "}
-            if there are enrollments but no pods, otherwise <code>open</code>. Past cron-email dedupe
-            for this Friday is cleared so reminders can fire again.
+            Returns to <code>locked</code> if pods already exist, otherwise <code>open</code>.
+            Past cron-email dedupe for this Friday is cleared so reminders can fire again.
           </p>
           <input type="hidden" name="intent" value="uncancel" />
           <button

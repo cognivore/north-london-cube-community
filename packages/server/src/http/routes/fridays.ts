@@ -8,11 +8,9 @@ import { apiError, authMiddleware } from "../middleware.js";
 import { rsvpIn, rsvpOut } from "../../programs/rsvp.js";
 import { enrollCube, withdrawEnrollment } from "../../programs/enrollment.js";
 import {
-  FridayRepo, EnrollmentRepo, RsvpRepo, VoteRepo, PodRepo,
+  FridayRepo, EnrollmentRepo, RsvpRepo, PodRepo,
 } from "../../repos/types.js";
 import { Effect } from "effect";
-import { Clock } from "../../capabilities/clock.js";
-import { RNG } from "../../capabilities/rng.js";
 
 // Extract error kind from Effect's FiberFailure-wrapped errors
 function extractErrorKind(e: unknown): string | undefined {
@@ -211,40 +209,6 @@ fridays.delete("/:id/enrollments/:eid", authMiddleware(), async (c) => {
       return apiError(c, 404, "NOT_FOUND", "Enrollment not found");
     }
     return apiError(c, 500, "INTERNAL", "Withdrawal failed");
-  }
-});
-
-// POST /api/fridays/:id/vote — submit ranked choice vote
-fridays.post("/:id/vote", authMiddleware(), async (c) => {
-  const run = c.get("effectRuntime");
-  const user = c.get("user");
-  const body = await c.req.json();
-  const fridayId = c.req.param("id")!;
-
-  try {
-    const vote = await run(
-      Effect.gen(function* () {
-        const voteRepo = yield* VoteRepo;
-        const clock = yield* Clock;
-        const rng = yield* RNG;
-
-        const voteId = (yield* rng.uuid()) as any;
-        const now = yield* clock.now();
-
-        const voteRecord = {
-          id: voteId,
-          fridayId: fridayId as any,
-          userId: user.id,
-          ranking: body.ranking,
-          createdAt: now,
-        };
-
-        return yield* voteRepo.upsert(voteRecord);
-      }),
-    );
-    return c.json({ vote });
-  } catch {
-    return apiError(c, 500, "INTERNAL", "Vote submission failed");
   }
 });
 

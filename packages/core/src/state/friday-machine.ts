@@ -1,13 +1,23 @@
 /**
  * Friday state machine — pure transition function.
  * Total case analysis via TypeScript exhaustiveness checking.
+ *
+ * Linear path:
+ *   scheduled --open_friday-->      open
+ *   open      --close_enrollments-> locked        (cube is picked + pods formed
+ *                                                  by the lifecycle driver as
+ *                                                  part of this transition)
+ *   open      --cancel_no_cubes-->  cancelled
+ *   locked    --confirm-->          confirmed
+ *   locked    --cancel_insufficient->cancelled
+ *   confirmed --begin-->            in_progress
+ *   in_progress --complete-->       complete
+ *   * --admin_cancel--> cancelled  (from any non-terminal)
  */
 
-import type { NonEmptyArray, Result } from "../brand.js";
+import type { Result } from "../brand.js";
 import { err, ok } from "../brand.js";
-import type { EnrollmentId, NonNegativeInt } from "../ids.js";
-import type { CancelReason, FridayState, VoteContext } from "../model/friday.js";
-import type { PodConfiguration } from "../model/pod.js";
+import type { CancelReason, FridayState } from "../model/friday.js";
 
 // ---------------------------------------------------------------------------
 // FridayEvent — inputs to the state machine
@@ -16,11 +26,7 @@ import type { PodConfiguration } from "../model/pod.js";
 export type FridayEvent =
   | { readonly kind: "open_friday" }
   | { readonly kind: "close_enrollments" }
-  | { readonly kind: "open_vote"; readonly vote: VoteContext }
-  | { readonly kind: "skip_vote"; readonly winners: NonEmptyArray<EnrollmentId> }
   | { readonly kind: "cancel_no_cubes" }
-  | { readonly kind: "close_vote"; readonly winners: NonEmptyArray<EnrollmentId> }
-  | { readonly kind: "lock_friday"; readonly config: PodConfiguration; readonly seated: NonNegativeInt }
   | { readonly kind: "confirm" }
   | { readonly kind: "cancel_insufficient" }
   | { readonly kind: "begin" }
@@ -67,34 +73,10 @@ export function transition(
 
     case "open": {
       if (event.kind === "close_enrollments") {
-        return ok({ kind: "enrollment_closed" });
-      }
-      return invalidTransition(state.kind, event.kind);
-    }
-
-    case "enrollment_closed": {
-      if (event.kind === "open_vote") {
-        return ok({ kind: "vote_open", vote: event.vote });
-      }
-      if (event.kind === "skip_vote") {
-        return ok({ kind: "vote_closed", winners: event.winners });
+        return ok({ kind: "locked" });
       }
       if (event.kind === "cancel_no_cubes") {
         return ok({ kind: "cancelled", reason: "no_cubes" });
-      }
-      return invalidTransition(state.kind, event.kind);
-    }
-
-    case "vote_open": {
-      if (event.kind === "close_vote") {
-        return ok({ kind: "vote_closed", winners: event.winners });
-      }
-      return invalidTransition(state.kind, event.kind);
-    }
-
-    case "vote_closed": {
-      if (event.kind === "lock_friday") {
-        return ok({ kind: "locked", config: event.config });
       }
       return invalidTransition(state.kind, event.kind);
     }
@@ -144,22 +126,15 @@ export function transition(
 }
 
 // ---------------------------------------------------------------------------
-// RSVP / enrollment / vote acceptance checks
+// RSVP / enrollment acceptance checks
 // ---------------------------------------------------------------------------
 
 const RSVP_ACCEPTING_STATES: ReadonlySet<FridayState["kind"]> = new Set([
   "open",
-  "enrollment_closed",
-  "vote_open",
-  "vote_closed",
 ]);
 
 const ENROLLMENT_ACCEPTING_STATES: ReadonlySet<FridayState["kind"]> = new Set([
   "open",
-]);
-
-const VOTE_ACCEPTING_STATES: ReadonlySet<FridayState["kind"]> = new Set([
-  "vote_open",
 ]);
 
 export const canAcceptRsvp = (state: FridayState): boolean =>
@@ -167,9 +142,6 @@ export const canAcceptRsvp = (state: FridayState): boolean =>
 
 export const canAcceptEnrollment = (state: FridayState): boolean =>
   ENROLLMENT_ACCEPTING_STATES.has(state.kind);
-
-export const canAcceptVote = (state: FridayState): boolean =>
-  VOTE_ACCEPTING_STATES.has(state.kind);
 
 // ---------------------------------------------------------------------------
 // Helpers

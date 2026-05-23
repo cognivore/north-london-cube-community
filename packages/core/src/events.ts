@@ -3,30 +3,24 @@
  * All events are values, published inside transactions via outbox pattern.
  */
 
-import type { NonEmptyArray } from "./brand.js";
 import type {
   CubeId,
-  EnrollmentId,
   FridayId,
   ISO8601,
   LocalDate,
   MatchId,
-  NonNegativeInt,
   PodId,
   RoundId,
   UserId,
   VenueId,
 } from "./ids.js";
-import type { MatchResult, PodConfiguration } from "./model/index.js";
+import type { MatchResult } from "./model/index.js";
 import type { Standing } from "./engine/pairings-types.js";
 
 export type DomainEvent =
   | { readonly kind: "friday.scheduled"; readonly fridayId: FridayId; readonly date: LocalDate; readonly venueId: VenueId }
   | { readonly kind: "friday.opened"; readonly fridayId: FridayId }
-  | { readonly kind: "friday.enrollment_closed"; readonly fridayId: FridayId; readonly enrollmentCount: NonNegativeInt }
-  | { readonly kind: "friday.vote_opened"; readonly fridayId: FridayId; readonly candidates: NonEmptyArray<EnrollmentId> }
-  | { readonly kind: "friday.vote_closed"; readonly fridayId: FridayId; readonly winners: NonEmptyArray<EnrollmentId> }
-  | { readonly kind: "friday.locked"; readonly fridayId: FridayId; readonly config: PodConfiguration }
+  | { readonly kind: "friday.locked"; readonly fridayId: FridayId }
   | { readonly kind: "friday.confirmed"; readonly fridayId: FridayId }
   | { readonly kind: "friday.cancelled"; readonly fridayId: FridayId; readonly reason: string }
   | { readonly kind: "friday.begun"; readonly fridayId: FridayId }

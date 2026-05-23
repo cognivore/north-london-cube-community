@@ -155,16 +155,6 @@ export const CubeSchema = z.object({
 });
 
 // ---------------------------------------------------------------------------
-// VoteContext
-// ---------------------------------------------------------------------------
-
-export const VoteContextSchema = z.object({
-  candidates: nonEmptyArray(EnrollmentIdSchema),
-  opensAt: ISO8601Schema,
-  closesAt: ISO8601Schema,
-});
-
-// ---------------------------------------------------------------------------
 // CancelReason
 // ---------------------------------------------------------------------------
 
@@ -267,26 +257,14 @@ export const PodConfigurationSchema = z.object({
 export const FridayStateSchema = z.discriminatedUnion("kind", [
     z.object({ kind: z.literal("scheduled") }),
     z.object({ kind: z.literal("open") }),
-    z.object({ kind: z.literal("enrollment_closed") }),
-    z.object({
-      kind: z.literal("vote_open"),
-      vote: VoteContextSchema,
-    }),
-    z.object({
-      kind: z.literal("vote_closed"),
-      winners: nonEmptyArray(EnrollmentIdSchema),
-    }),
-    z.object({
-      kind: z.literal("locked"),
-      config: PodConfigurationSchema,
-    }),
+    z.object({ kind: z.literal("locked") }),
     z.object({ kind: z.literal("confirmed") }),
+    z.object({ kind: z.literal("in_progress") }),
+    z.object({ kind: z.literal("complete") }),
     z.object({
       kind: z.literal("cancelled"),
       reason: CancelReasonSchema,
     }),
-    z.object({ kind: z.literal("in_progress") }),
-    z.object({ kind: z.literal("complete") }),
   ]);
 
 // ---------------------------------------------------------------------------

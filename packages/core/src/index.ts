@@ -59,5 +59,3 @@ export { generatePairings } from "./engine/pairings.js";
 export { packPods } from "./engine/pod-packer.js";
 export type { PackPodsInput, PackPodsError } from "./engine/pod-packer.js";
 export { computeStandings, computeTeamScore } from "./engine/scoring.js";
-export { runIRV } from "./engine/vote.js";
-export type { VoteInput, VoteResult, IRVRound, VoteError } from "./engine/vote.js";

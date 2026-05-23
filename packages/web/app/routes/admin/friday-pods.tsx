@@ -257,7 +257,7 @@ export default function FridayPods() {
 
       {pods.length === 0 && (
         <p className="rounded-sm border border-rule bg-paper-alt p-4 text-sm text-ink-faint">
-          No pods materialized yet. Advance the Friday from <code>vote_closed</code> to create them
+          No pods materialized yet. Advance the Friday from <code>open</code> to create them
           (or use Force lock from the override page).
         </p>
       )}

@@ -203,8 +203,9 @@ async function checkCubeAnnouncements() {
 
 /**
  * Wednesday 09:00–09:30 London — auto-promote open Friday to locked so the
- * cube announcement email can fire. Walks `advanceFriday` until state leaves
- * {open, vote_open, vote_closed}; stops on no-progress. Capped iterations.
+ * cube announcement email can fire. The simplified state machine collapses
+ * vote/enrollment_closed into the open → locked transition, so we only need
+ * to advance from `open`. Stops on no-progress. Capped iterations.
  */
 async function checkFridayAutoPromote() {
   if (!_runEffect) return;
@@ -218,7 +219,7 @@ async function checkFridayAutoPromote() {
     `SELECT id, json_extract(state, '$.kind') AS kind FROM fridays WHERE date = ?`,
     [fridayDate]);
 
-  const advancing: ReadonlySet<string> = new Set(["open", "vote_open", "vote_closed"]);
+  const advancing: ReadonlySet<string> = new Set(["open"]);
 
   for (const fri of fridays) {
     let kind = fri.kind;

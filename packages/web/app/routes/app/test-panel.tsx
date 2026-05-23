@@ -105,9 +105,6 @@ function advanceLabel(state: string): string {
   switch (state) {
     case "scheduled": return "Open RSVPs";
     case "open": return "Close enrollment →";
-    case "enrollment_closed": return "Evaluate cubes →";
-    case "vote_open": return "Close vote →";
-    case "vote_closed": return "Lock pods →";
     case "locked": return "Confirm →";
     case "confirmed": return "Start event →";
     case "in_progress": return "Complete →";

@@ -139,18 +139,17 @@ admin.post("/test-email", async (c) => {
   }
 });
 
-// POST /api/admin/fridays/:id/set-state — force the Friday to any state, bypassing
-// the state machine. Reconstructs the state shape from current enrollments/winners
-// where required. Clears the cron-email dedupe so reminders can fire again after
-// stepping backwards. Use this for "reopen vote", "back to enrollment_closed", etc.
+// POST /api/admin/fridays/:id/set-state — force the Friday to any state,
+// bypassing the state machine. Clears the cron-email dedupe so reminders can
+// fire again after stepping backwards. Use this to recover a stuck Friday.
 admin.post("/fridays/:id/set-state", async (c) => {
   const fridayId = c.req.param("id")!;
   const body = await c.req.json().catch(() => null) as { target?: string } | null;
   const target = body?.target;
 
   const allowed = new Set([
-    "scheduled", "open", "enrollment_closed", "vote_open", "vote_closed",
-    "locked", "confirmed", "in_progress", "complete", "cancelled",
+    "scheduled", "open", "locked",
+    "confirmed", "in_progress", "complete", "cancelled",
   ]);
   if (!target || !allowed.has(target)) {
     return apiError(c, 400, "BAD_REQUEST", `target must be one of: ${Array.from(allowed).join(", ")}`);
@@ -161,77 +160,27 @@ admin.post("/fridays/:id/set-state", async (c) => {
     const fri = dbQuery<{ id: string; date: string; state: string }>(db,
       "SELECT id, date, state FROM fridays WHERE id = ?", [fridayId]);
     if (fri.length === 0) return apiError(c, 404, "NOT_FOUND", "Friday not found");
-    const currentState = JSON.parse(fri[0]!.state) as { kind: string; winners?: string[]; vote?: unknown };
+    const currentState = JSON.parse(fri[0]!.state) as { kind: string };
 
     let newState: Record<string, unknown>;
     switch (target) {
       case "scheduled":
       case "open":
-      case "enrollment_closed":
+      case "locked":
       case "confirmed":
       case "in_progress":
       case "complete":
         newState = { kind: target };
         break;
-
-      case "vote_open": {
-        // Rebuild vote context from active enrollments. Preserve existing votes
-        // in the votes table — admin can re-close to re-tally.
-        const enrollments = dbQuery<{ id: string }>(db,
-          "SELECT id FROM enrollments WHERE friday_id = ? AND withdrawn = 0", [fridayId]);
-        if (enrollments.length === 0) {
-          return apiError(c, 409, "NO_ENROLLMENTS", "Cannot open vote with no active enrollments");
-        }
-        const now = new Date();
-        // Close at end of the Friday date in London — admin can manually close earlier.
-        const closesAt = new Date(`${fri[0]!.date}T18:00:00Z`).toISOString();
-        newState = {
-          kind: "vote_open",
-          vote: {
-            candidates: enrollments.map(e => e.id),
-            opensAt: now.toISOString(),
-            closesAt,
-          },
-        };
-        break;
-      }
-
-      case "vote_closed": {
-        // Preserve existing winners if we already had any; otherwise default to
-        // all active enrollments (admin can re-run advance from vote_open to
-        // re-tally if they want IRV instead).
-        let winners: string[] | null = null;
-        if (Array.isArray(currentState.winners) && currentState.winners.length > 0) {
-          winners = currentState.winners;
-        } else {
-          const enrollments = dbQuery<{ id: string }>(db,
-            "SELECT id FROM enrollments WHERE friday_id = ? AND withdrawn = 0 LIMIT 1", [fridayId]);
-          if (enrollments.length === 0) {
-            return apiError(c, 409, "NO_ENROLLMENTS", "Cannot close vote with no enrollments and no existing winners");
-          }
-          winners = [enrollments[0]!.id];
-        }
-        newState = { kind: "vote_closed", winners };
-        break;
-      }
-
-      case "locked":
-        // Mirrors force-lock's shape: downstream code never reads state.config.
-        // Note: this does NOT create pods. Use force-lock if you also need pods.
-        newState = { kind: "locked", config: null };
-        break;
-
       case "cancelled":
         newState = { kind: "cancelled", reason: "admin" };
         break;
-
       default:
         return apiError(c, 400, "BAD_REQUEST", `Unsupported target: ${target}`);
     }
 
     dbRun(db, "UPDATE fridays SET state = ? WHERE id = ?",
       [JSON.stringify(newState), fridayId]);
-    // Clear cron-email dedup so reminders can fire again when stepping back.
     dbRun(db, "DELETE FROM sent_emails WHERE friday_id = ?", [fridayId]);
     dbPersist();
 
@@ -244,9 +193,8 @@ admin.post("/fridays/:id/set-state", async (c) => {
 // POST /api/admin/fridays/:id/uncancel — restore a cancelled Friday and notify
 // everyone with a live RSVP. Bypasses the state machine (cancelled is terminal).
 // Picks a sensible state based on what data exists:
-//   pods exist            → locked
-//   enrollments exist     → enrollment_closed
-//   otherwise             → open
+//   pods exist        → locked
+//   otherwise         → open
 admin.post("/fridays/:id/uncancel", async (c) => {
   const fridayId = c.req.param("id")!;
 
@@ -262,14 +210,9 @@ admin.post("/fridays/:id/uncancel", async (c) => {
 
     const podCount = dbQuery<{ n: number }>(db,
       "SELECT COUNT(*) AS n FROM pods WHERE friday_id = ?", [fridayId])[0]?.n ?? 0;
-    const enrollmentCount = dbQuery<{ n: number }>(db,
-      "SELECT COUNT(*) AS n FROM enrollments WHERE friday_id = ? AND withdrawn = 0",
-      [fridayId])[0]?.n ?? 0;
 
     const restoredState =
-      podCount > 0 ? { kind: "locked", config: null } :
-      enrollmentCount > 0 ? { kind: "enrollment_closed" } :
-      { kind: "open" };
+      podCount > 0 ? { kind: "locked" } : { kind: "open" };
 
     dbRun(db, "UPDATE fridays SET state = ? WHERE id = ?",
       [JSON.stringify(restoredState), fridayId]);
@@ -498,20 +441,15 @@ admin.post("/fridays/:id/force-lock", async (c) => {
 
         const friday = yield* fridayRepo.findById(fridayId as any);
         if (!friday) return { error: "not_found" as const };
-        const allowedFrom = ["enrollment_closed", "vote_open", "vote_closed", "locked"];
+        const allowedFrom = ["open", "locked"];
         if (!allowedFrom.includes(friday.state.kind)) {
           return { error: "wrong_state" as const, state: friday.state.kind };
         }
 
-        // Determine which cubes get pods. If state has winners, use those.
-        // Otherwise fall back to all active enrollments for the friday.
-        const winnerIds = friday.state.kind === "vote_closed"
-          ? (friday.state.winners as ReadonlyArray<string>)
-          : null;
+        // Create pods for every active enrollment. Coordinator can then
+        // hand-build the seating, or fold redundant pods themselves.
         const enrollments = yield* enrollmentRepo.findActiveByFriday(friday.id);
-        const winningEnrollments = winnerIds
-          ? enrollments.filter(e => winnerIds.includes(e.id as string))
-          : enrollments;
+        const winningEnrollments = enrollments;
         if (winningEnrollments.length === 0) {
           return { error: "no_enrollments" as const };
         }
@@ -553,7 +491,7 @@ admin.post("/fridays/:id/force-lock", async (c) => {
                format, "drafting", JSON.stringify(template)]);
           });
 
-          // Three pending rounds (matches the default in vote_closed → locked)
+          // Three pending rounds (matches the default in open → locked)
           for (let r = 1; r <= template.rounds; r++) {
             const roundId = yield* rng.uuid();
             yield* Effect.sync(() => {
@@ -569,13 +507,10 @@ admin.post("/fridays/:id/force-lock", async (c) => {
           created.push({ podId, cubeId: enrollment.cubeId as string, format });
         }
 
-        // Bypass the state-machine PodConfiguration requirement and write
-        // a minimal locked state directly. Downstream code never reads
-        // state.config, so this is safe.
         yield* Effect.sync(() => {
           dbRun(db,
             `UPDATE fridays SET state = ?, locked_at = COALESCE(locked_at, ?) WHERE id = ?`,
-            [JSON.stringify({ kind: "locked", config: null }), now, friday.id]);
+            [JSON.stringify({ kind: "locked" }), now, friday.id]);
           dbPersist();
         });
 
@@ -587,7 +522,7 @@ admin.post("/fridays/:id/force-lock", async (c) => {
       if (result.error === "not_found") return apiError(c, 404, "NOT_FOUND", "Friday not found");
       if (result.error === "wrong_state") {
         return apiError(c, 409, "WRONG_STATE",
-          `Force-lock only allowed from enrollment_closed/vote_open/vote_closed/locked (got ${result.state})`);
+          `Force-lock only allowed from open/locked (got ${result.state})`);
       }
       if (result.error === "no_enrollments") {
         return apiError(c, 409, "NO_ENROLLMENTS", "No active cube enrollments to lock");

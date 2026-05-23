@@ -552,8 +552,7 @@ const FridayRepoLive = Layer.succeed(FridayRepo, {
           `SELECT * FROM fridays
            WHERE date >= ?
               OR json_extract(state, '$.kind') IN
-                 ('open','enrollment_closed','vote_open','vote_closed',
-                  'locked','confirmed','in_progress')
+                 ('open','locked','confirmed','in_progress')
            ORDER BY date ASC`, [today]);
         return rows.map(toFriday);
       },

@@ -51,7 +51,6 @@ export {
   // Cube
   CubeSchema,
   // Friday
-  VoteContextSchema,
   CancelReasonSchema,
   FridayStateSchema,
   FridaySchema,
@@ -94,7 +93,6 @@ export {
   LoginInputSchema,
   RsvpInputSchema,
   EnrollCubeInputSchema,
-  VoteInputSchema,
   CreateCubeInputSchema,
   UpdateCubeInputSchema,
   ReportMatchInputSchema,
@@ -110,7 +108,6 @@ export type {
   LoginInput,
   RsvpInput,
   EnrollCubeInput,
-  VoteInput,
   CreateCubeInput,
   UpdateCubeInput,
   ReportMatchInput,

@@ -8,7 +8,6 @@ import {
   NonEmptyStringSchema,
   UrlSchema,
   EvenPodSizeSchema,
-  EnrollmentIdSchema,
   CubeIdSchema,
   NonNegativeIntSchema,
   ISO8601Schema,
@@ -55,16 +54,6 @@ export const EnrollCubeInputSchema = z.object({
 });
 
 export type EnrollCubeInput = z.infer<typeof EnrollCubeInputSchema>;
-
-// ---------------------------------------------------------------------------
-// VoteInput
-// ---------------------------------------------------------------------------
-
-export const VoteInputSchema = z.object({
-  ranking: z.array(EnrollmentIdSchema).min(1),
-});
-
-export type VoteInput = z.infer<typeof VoteInputSchema>;
 
 // ---------------------------------------------------------------------------
 // CreateCubeInput

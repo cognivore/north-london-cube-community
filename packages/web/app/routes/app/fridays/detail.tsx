@@ -79,7 +79,7 @@ export default function FridayDetail() {
   const { friday, enrollments, rsvps, pods, allCubes, currentUser, coveredCount } = data;
 
   const stateKind = friday.state.kind;
-  const canRsvp = ["open", "enrollment_closed", "vote_open", "vote_closed"].includes(stateKind);
+  const canRsvp = stateKind === "open";
   const canEnroll = stateKind === "open";
   const activeRsvps = rsvps.filter((r: any) => ["pending", "confirmed", "locked", "seated"].includes(r.state));
   const activeEnrollments = enrollments.filter((e: any) => !e.withdrawn);
@@ -314,9 +314,6 @@ function StateChip({ state }: { state: string }) {
   const colors: Record<string, string> = {
     scheduled: "text-ink-faint bg-paper-alt",
     open: "text-ok bg-paper-alt",
-    enrollment_closed: "text-amber bg-amber-soft",
-    vote_open: "text-dci-teal bg-dci-teal-soft",
-    vote_closed: "text-dci-teal bg-dci-teal-soft",
     locked: "text-dci-teal bg-dci-teal-soft",
     confirmed: "text-dci-teal bg-dci-teal-soft",
     in_progress: "text-amber bg-amber-soft",

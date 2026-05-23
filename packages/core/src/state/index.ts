@@ -2,7 +2,6 @@ export {
   transition,
   canAcceptRsvp,
   canAcceptEnrollment,
-  canAcceptVote,
 } from "./friday-machine.js";
 export type { FridayEvent, TransitionError } from "./friday-machine.js";
 

@@ -1,22 +1,9 @@
-import type { NonEmptyArray } from "../brand.js";
 import type {
-  EnrollmentId,
   FridayId,
   ISO8601,
   LocalDate,
   VenueId,
 } from "../ids.js";
-import type { PodConfiguration } from "./pod.js";
-
-// ---------------------------------------------------------------------------
-// VoteContext — attached to vote_open state
-// ---------------------------------------------------------------------------
-
-export type VoteContext = {
-  readonly candidates: NonEmptyArray<EnrollmentId>;
-  readonly opensAt: ISO8601;
-  readonly closesAt: ISO8601;
-};
 
 // ---------------------------------------------------------------------------
 // CancelReason
@@ -29,19 +16,26 @@ export type CancelReason =
 
 // ---------------------------------------------------------------------------
 // FridayState — discriminated union (the central state machine)
+//
+// Linear path:  scheduled → open → locked → confirmed → in_progress → complete
+// Cancelled is reachable from any non-terminal state.
+//
+// "open"      — enrollments + RSVPs accepted
+// "locked"    — enrollments closed, the least-recently-played cube has been
+//               picked, pods exist. Seating may not be finalized.
+// "confirmed" — seating final, ready to fire
+// "in_progress" — rounds are being played
+// "complete" / "cancelled" — terminal
 // ---------------------------------------------------------------------------
 
 export type FridayState =
   | { readonly kind: "scheduled" }
   | { readonly kind: "open" }
-  | { readonly kind: "enrollment_closed" }
-  | { readonly kind: "vote_open"; readonly vote: VoteContext }
-  | { readonly kind: "vote_closed"; readonly winners: NonEmptyArray<EnrollmentId> }
-  | { readonly kind: "locked"; readonly config: PodConfiguration }
+  | { readonly kind: "locked" }
   | { readonly kind: "confirmed" }
-  | { readonly kind: "cancelled"; readonly reason: CancelReason }
   | { readonly kind: "in_progress" }
-  | { readonly kind: "complete" };
+  | { readonly kind: "complete" }
+  | { readonly kind: "cancelled"; readonly reason: CancelReason };
 
 // ---------------------------------------------------------------------------
 // Friday

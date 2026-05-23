@@ -102,14 +102,6 @@ export const api = {
       headers: { ...extra?.headers },
     }),
 
-  vote: (fridayId: string, ranking: string[], extra?: RequestInit) =>
-    apiFetch<{ vote: any }>(`/api/fridays/${fridayId}/vote`, {
-      method: "POST",
-      body: JSON.stringify({ ranking }),
-      ...extra,
-      headers: { ...extra?.headers },
-    }),
-
   // Cubes
   listCubes: (extra?: RequestInit) =>
     apiFetch<{ cubes: any[] }>("/api/cubes", extra),

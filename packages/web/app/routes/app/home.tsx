@@ -194,9 +194,6 @@ function StateChip({ state }: { state: string }) {
   const colors: Record<string, string> = {
     scheduled: "text-ink-faint bg-paper-sunken",
     open: "text-ok bg-paper-sunken",
-    enrollment_closed: "text-amber bg-amber-soft",
-    vote_open: "text-dci-teal bg-dci-teal-soft",
-    vote_closed: "text-dci-teal bg-dci-teal-soft",
     locked: "text-dci-teal bg-dci-teal-soft",
     confirmed: "text-dci-teal bg-dci-teal-soft",
     in_progress: "text-amber bg-amber-soft",

@@ -6,7 +6,7 @@ import type { NonEmptyArray } from "../src/brand.js";
 import type { Cube } from "../src/model/cube.js";
 import type { Enrollment } from "../src/model/enrollment.js";
 import type { DraftFormat } from "../src/model/enums.js";
-import type { Friday, FridayState, VoteContext } from "../src/model/friday.js";
+import type { Friday, FridayState } from "../src/model/friday.js";
 import type { Match, MatchResult, PlannedMatch } from "../src/model/match.js";
 import type { PlannedPod, PodConfiguration, Seat } from "../src/model/pod.js";
 import type { BanState, UserProfile } from "../src/model/user.js";
@@ -232,18 +232,6 @@ export function makeVote(overrides: {
     userId: overrides.userId,
     ranking: overrides.ranking as NonEmptyArray<EnrollmentId>,
     createdAt: unsafeISO8601("2025-01-01T12:00:00Z"),
-  };
-}
-
-// ---------------------------------------------------------------------------
-// makeVoteContext
-// ---------------------------------------------------------------------------
-
-export function makeVoteContext(candidateIds: EnrollmentId[]): VoteContext {
-  return {
-    candidates: candidateIds as NonEmptyArray<EnrollmentId>,
-    opensAt: unsafeISO8601("2025-01-01T00:00:00Z"),
-    closesAt: unsafeISO8601("2025-01-01T12:00:00Z"),
   };
 }
 
