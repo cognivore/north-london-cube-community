@@ -55,6 +55,27 @@ export async function action({ request }: { request: Request }) {
     return { success: `Updated ${displayName ?? "user"}` };
   }
 
+  if (intent === "merge") {
+    const sourceId = formData.get("sourceId") as string;
+    const targetId = formData.get("targetId") as string;
+    if (!sourceId || !targetId) return { error: "Pick a target user to merge into" };
+    const res = await fetch(
+      `${SERVER_API_BASE}/api/admin/users/${sourceId}/merge-into/${targetId}`,
+      { method: "POST", headers: { "Content-Type": "application/json", ...ch } },
+    );
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      return { error: body?.error?.message ?? `Merge failed (${res.status})` };
+    }
+    const body = await res.json().catch(() => ({} as any));
+    const moved = body?.moved ?? {};
+    const summary = Object.entries(moved)
+      .filter(([, n]) => (n as number) > 0)
+      .map(([k, n]) => `${k}: ${n}`)
+      .join(", ");
+    return { success: summary ? `Merged. Moved ${summary}.` : "Merged. (no attached rows)" };
+  }
+
   return null;
 }
 
@@ -63,6 +84,13 @@ export default function AdminUsers() {
   const actionData = useActionData<typeof action>();
   const [params, setParams] = useSearchParams();
   const editingId = params.get("edit");
+  const mergingId = params.get("merge");
+
+  // *@*.local accounts are admin-created walk-in placeholders. Surfacing
+  // "merge into" lets a coordinator fold them into the real account once
+  // the player registers properly. Targets are every non-local user.
+  const isLocalEmail = (email: string) => /@[^@]+\.local$/i.test(email);
+  const mergeTargets = users.filter((u) => !isLocalEmail(u.email));
 
   return (
     <div className="space-y-4">
@@ -95,7 +123,10 @@ export default function AdminUsers() {
             <tbody>
               {users.map((u) => {
                 const isEditing = editingId === u.id;
-                return isEditing ? (
+                const isMerging = mergingId === u.id;
+                const isLocal = isLocalEmail(u.email);
+                if (isEditing) {
+                  return (
                   <tr key={u.id} className="border-b border-ink-faint/10 bg-paper">
                     <td colSpan={4} className="px-3 py-3">
                       <Form method="post" className="space-y-2">
@@ -143,25 +174,111 @@ export default function AdminUsers() {
                       </Form>
                     </td>
                   </tr>
-                ) : (
+                  );
+                }
+                if (isMerging) {
+                  return (
+                  <tr key={u.id} className="border-b border-ink-faint/10 bg-amber-soft">
+                    <td colSpan={4} className="px-3 py-3">
+                      <Form
+                        method="post"
+                        className="space-y-2"
+                        onSubmit={(e) => {
+                          const form = e.currentTarget as HTMLFormElement;
+                          const sel = form.querySelector<HTMLSelectElement>('select[name="targetId"]');
+                          const targetLabel = sel?.options[sel.selectedIndex]?.text ?? "target";
+                          if (!confirm(`Merge ${u.displayName} (${u.email}) → ${targetLabel}?\n\nThis reassigns all of this account's data to the target and deletes this account. Cannot be undone.`)) {
+                            e.preventDefault();
+                          }
+                        }}
+                      >
+                        <input type="hidden" name="intent" value="merge" />
+                        <input type="hidden" name="sourceId" value={u.id} />
+                        <p className="text-sm text-amber">
+                          Merge <strong>{u.displayName}</strong>{" "}
+                          <span className="text-ink-faint">({u.email})</span> into:
+                        </p>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <select
+                            name="targetId"
+                            required
+                            defaultValue=""
+                            className="flex-1 min-w-[260px] rounded-sm border border-rule-heavy bg-paper px-2 py-1.5 text-sm text-ink"
+                          >
+                            <option value="" disabled>Pick a target user…</option>
+                            {mergeTargets.map((t) => (
+                              <option key={t.id} value={t.id}>
+                                {t.displayName} — {t.email}
+                              </option>
+                            ))}
+                          </select>
+                          <button
+                            type="submit"
+                            className="rounded-sm border border-warn bg-paper px-3 py-1.5 text-xs font-semibold text-warn hover:bg-warn-soft"
+                          >
+                            Merge
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const next = new URLSearchParams(params);
+                              next.delete("merge");
+                              setParams(next, { replace: true });
+                            }}
+                            className="rounded-sm border border-rule bg-paper px-3 py-1.5 text-xs text-ink-soft hover:bg-paper-alt"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                        <p className="text-xs text-ink-faint">
+                          Reassigns all RSVPs, cubes, enrollments, seats, matches, etc.
+                          on the source to the target, then deletes the source.
+                          Same-Friday conflicts on RSVPs/votes are resolved in the target's favour.
+                        </p>
+                      </Form>
+                    </td>
+                  </tr>
+                  );
+                }
+                return (
                   <tr key={u.id} className="border-b border-ink-faint/10 last:border-0">
-                    <td className="px-3 py-2 text-ink">{u.displayName}</td>
+                    <td className="px-3 py-2 text-ink">
+                      {u.displayName}
+                      {isLocal && (
+                        <span className="ml-2 inline-block rounded-sm bg-amber-soft px-1.5 py-0.5 text-xs text-amber">walk-in</span>
+                      )}
+                    </td>
                     <td className="px-3 py-2 text-ink-soft" data-mono>
                       {u.createdAt.slice(0, 10)}
                     </td>
                     <td className="px-3 py-2 text-ink-faint">{u.role}</td>
                     <td className="px-3 py-2 text-right">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const next = new URLSearchParams(params);
-                          next.set("edit", u.id);
-                          setParams(next, { replace: true });
-                        }}
-                        className="text-xs text-dci-teal hover:underline"
-                      >
-                        edit
-                      </button>
+                      <div className="flex items-center justify-end gap-3">
+                        {isLocal && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const next = new URLSearchParams(params);
+                              next.set("merge", u.id);
+                              setParams(next, { replace: true });
+                            }}
+                            className="text-xs text-amber hover:underline"
+                          >
+                            merge into…
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const next = new URLSearchParams(params);
+                            next.set("edit", u.id);
+                            setParams(next, { replace: true });
+                          }}
+                          className="text-xs text-dci-teal hover:underline"
+                        >
+                          edit
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 );

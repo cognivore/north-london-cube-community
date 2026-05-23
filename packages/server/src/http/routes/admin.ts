@@ -1540,4 +1540,155 @@ admin.get("/audit", async (c) => {
   }
 });
 
+// POST /api/admin/users/:srcId/merge-into/:tgtId — fold a source user (typically
+// a placeholder *@*.local walk-in account) into a target user. All FK-bearing
+// rows (rsvps, cubes, enrollments, votes, pods, seats, matches, audit_events)
+// are reassigned to the target. UNIQUE(friday_id, user_id) constraints on
+// rsvps and votes are resolved by keeping the target's row and dropping the
+// source's conflicting one. The source's noShowCount is summed into the
+// target. Sessions belonging to the source are deleted; the source user row
+// is deleted last. An audit event records the merge with before/after
+// summary for traceability.
+admin.post("/users/:srcId/merge-into/:tgtId", async (c) => {
+  const actor = c.get("user");
+  const srcId = c.req.param("srcId")!;
+  const tgtId = c.req.param("tgtId")!;
+
+  if (srcId === tgtId) {
+    return apiError(c, 400, "BAD_REQUEST", "source and target must differ");
+  }
+  if (srcId === BYE_USER_ID || tgtId === BYE_USER_ID) {
+    return apiError(c, 400, "BAD_REQUEST", "Cannot merge BYE user");
+  }
+
+  try {
+    const db = await getDb();
+    const src = dbQuery<{
+      id: string; email: string; display_name: string; role: string; profile: string;
+    }>(db, "SELECT id, email, display_name, role, profile FROM users WHERE id = ?", [srcId])[0];
+    const tgt = dbQuery<{
+      id: string; email: string; display_name: string; role: string; profile: string;
+    }>(db, "SELECT id, email, display_name, role, profile FROM users WHERE id = ?", [tgtId])[0];
+
+    if (!src) return apiError(c, 404, "NOT_FOUND", "Source user not found");
+    if (!tgt) return apiError(c, 404, "NOT_FOUND", "Target user not found");
+    if (src.role === "coordinator") {
+      return apiError(c, 403, "FORBIDDEN", "Refusing to merge a coordinator account; demote first");
+    }
+
+    // Count what we're about to move, before we mutate. Used for the audit
+    // payload and the response so the caller can sanity-check the merge.
+    const counts = {
+      rsvps:          countWhere(db, "rsvps",       "user_id = ?",    [srcId]),
+      cubes:          countWhere(db, "cubes",       "owner_id = ?",   [srcId]),
+      enrollments:    countWhere(db, "enrollments", "host_id = ?",    [srcId]),
+      votes:          countWhere(db, "votes",       "user_id = ?",    [srcId]),
+      pods:           countWhere(db, "pods",        "host_id = ?",    [srcId]),
+      seats:          countWhere(db, "seats",       "user_id = ?",    [srcId]),
+      matches_p1:     countWhere(db, "matches",     "player1_id = ?", [srcId]),
+      matches_p2:     countWhere(db, "matches",     "player2_id = ?", [srcId]),
+      audit_actor:    countWhere(db, "audit_events","actor_id = ?",   [srcId]),
+      sessions:       countWhere(db, "sessions",    "user_id = ?",    [srcId]),
+    };
+
+    // Conflict resolution for tables with UNIQUE(friday_id, user_id): if the
+    // target already has a row for the same friday, keep the target's row
+    // (richer state — locked > pending etc.) and drop the source's. Otherwise
+    // simply reassign user_id.
+    const droppedRsvps = dbQuery<{ id: string }>(db,
+      `SELECT r1.id FROM rsvps r1
+       WHERE r1.user_id = ?
+         AND EXISTS (SELECT 1 FROM rsvps r2 WHERE r2.user_id = ? AND r2.friday_id = r1.friday_id)`,
+      [srcId, tgtId]);
+    for (const r of droppedRsvps) dbRun(db, "DELETE FROM rsvps WHERE id = ?", [r.id]);
+    dbRun(db, "UPDATE rsvps SET user_id = ? WHERE user_id = ?", [tgtId, srcId]);
+
+    const droppedVotes = dbQuery<{ id: string }>(db,
+      `SELECT v1.id FROM votes v1
+       WHERE v1.user_id = ?
+         AND EXISTS (SELECT 1 FROM votes v2 WHERE v2.user_id = ? AND v2.friday_id = v1.friday_id)`,
+      [srcId, tgtId]);
+    for (const v of droppedVotes) dbRun(db, "DELETE FROM votes WHERE id = ?", [v.id]);
+    dbRun(db, "UPDATE votes SET user_id = ? WHERE user_id = ?", [tgtId, srcId]);
+
+    // Reassign the rest. No UNIQUE-on-user constraints elsewhere — straight UPDATE.
+    dbRun(db, "UPDATE cubes       SET owner_id   = ? WHERE owner_id   = ?", [tgtId, srcId]);
+    dbRun(db, "UPDATE enrollments SET host_id    = ? WHERE host_id    = ?", [tgtId, srcId]);
+    dbRun(db, "UPDATE pods        SET host_id    = ? WHERE host_id    = ?", [tgtId, srcId]);
+    dbRun(db, "UPDATE seats       SET user_id    = ? WHERE user_id    = ?", [tgtId, srcId]);
+    dbRun(db, "UPDATE matches     SET player1_id = ? WHERE player1_id = ?", [tgtId, srcId]);
+    dbRun(db, "UPDATE matches     SET player2_id = ? WHERE player2_id = ?", [tgtId, srcId]);
+    dbRun(db, "UPDATE audit_events SET actor_id  = ? WHERE actor_id   = ?", [tgtId, srcId]);
+
+    // Sum noShowCount into the target.
+    let mergedProfile = tgt.profile;
+    try {
+      const srcProfile = JSON.parse(src.profile) as UserProfile;
+      const tgtProfile = JSON.parse(tgt.profile) as UserProfile;
+      const summed = ((tgtProfile.noShowCount as unknown as number) ?? 0)
+                   + ((srcProfile.noShowCount as unknown as number) ?? 0);
+      mergedProfile = JSON.stringify({
+        ...tgtProfile,
+        noShowCount: unsafeNonNegativeInt(summed) as unknown as number,
+      });
+      dbRun(db, "UPDATE users SET profile = ? WHERE id = ?", [mergedProfile, tgtId]);
+    } catch {
+      // If either profile JSON is malformed, leave the target's profile untouched.
+    }
+
+    // Sessions never carry semantic value once detached from the user; drop them.
+    dbRun(db, "DELETE FROM sessions WHERE user_id = ?", [srcId]);
+
+    // And the source user row itself.
+    dbRun(db, "DELETE FROM users WHERE id = ?", [srcId]);
+
+    // Audit trail.
+    const run = c.get("effectRuntime");
+    await run(
+      Effect.gen(function* () {
+        const auditRepo = yield* AuditRepo;
+        const rng = yield* RNG;
+        const clock = yield* Clock;
+        yield* auditRepo.create({
+          id: unsafeAuditEventId(yield* rng.uuid()),
+          at: yield* clock.now(),
+          actorId: actor.id,
+          subject: { kind: "user", id: tgtId },
+          action: "admin_user_merged",
+          before: {
+            sourceId: srcId,
+            sourceEmail: src.email,
+            sourceDisplayName: src.display_name,
+          },
+          after: {
+            targetId: tgtId,
+            targetEmail: tgt.email,
+            targetDisplayName: tgt.display_name,
+            ...counts,
+            droppedConflictingRsvps: droppedRsvps.length,
+            droppedConflictingVotes: droppedVotes.length,
+          },
+        });
+      }),
+    );
+
+    dbPersist();
+
+    return c.json({
+      ok: true,
+      target: { id: tgt.id, email: tgt.email, displayName: tgt.display_name },
+      moved: counts,
+      droppedConflictingRsvps: droppedRsvps.length,
+      droppedConflictingVotes: droppedVotes.length,
+    });
+  } catch (e) {
+    return apiError(c, 500, "INTERNAL", `Merge failed: ${e instanceof Error ? e.message : String(e)}`);
+  }
+});
+
+function countWhere(db: unknown, table: string, where: string, params: ReadonlyArray<unknown>): number {
+  const rows = dbQuery<{ c: number }>(db as any, `SELECT count(*) AS c FROM ${table} WHERE ${where}`, params as any);
+  return rows[0]?.c ?? 0;
+}
+
 export { admin };
