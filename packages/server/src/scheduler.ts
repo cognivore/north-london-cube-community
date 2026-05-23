@@ -417,6 +417,32 @@ function addDays(yyyymmdd: string, n: number): string {
 
 let cronInterval: NodeJS.Timeout | null = null;
 
+/**
+ * Hard-delete user rows in pending_verification state that were created more
+ * than PENDING_TTL_MS ago. Keeps the directory and DCI sequence clean when
+ * scripted registration attempts pile up. Pending users have not verified an
+ * email so they cannot own cubes / RSVPs / sessions — the row is safe to drop.
+ */
+const PENDING_TTL_MS = 60 * 60 * 1000; // 1 hour
+
+async function gcPendingUsers() {
+  const db = await getDb();
+  const cutoff = new Date(Date.now() - PENDING_TTL_MS).toISOString();
+  const stale = query<{ id: string; email: string }>(
+    db,
+    `SELECT id, email FROM users
+     WHERE json_extract(auth_state, '$.kind') = 'pending_verification'
+       AND created_at < ?`,
+    [cutoff],
+  );
+  if (stale.length === 0) return;
+  for (const u of stale) {
+    dbRun(db, "DELETE FROM users WHERE id = ?", [u.id]);
+  }
+  persist();
+  console.log(`gcPendingUsers: removed ${stale.length} stale pending registrations`);
+}
+
 async function tick() {
   // 0. If odd-events are allowed, sweep up any orphaned pending RSVPs and
   //    promote them to confirmed so they enter the normal grace flow.
@@ -454,6 +480,9 @@ async function tick() {
 
   // 2. Cron emails
   try { await checkCubeAnnouncements(); } catch (e) { console.error("Cube announcement check failed:", e); }
+
+  // 3. Garbage-collect unverified registrations older than the TTL.
+  try { await gcPendingUsers(); } catch (e) { console.error("Pending-user GC failed:", e); }
 
   // Day-of-week-gated reminders
   const dow = getLondonDayOfWeek();

@@ -41,10 +41,14 @@ auth.post("/register", async (c) => {
         displayName: body.displayName,
       }),
     );
-    return c.json({
-      userId: result.user.id,
-      challengeToken: result.challengeToken,
-    }, 201);
+    // The challenge token MUST NOT leave the server outside of the magic-link
+    // email — otherwise a scripted register+verify loop bypasses the email
+    // step entirely. Only echo it back in TEST_MODE so e2e tests can drive
+    // the flow without an inbox.
+    const body_ = process.env.TEST_MODE === "true"
+      ? { userId: result.user.id, challengeToken: result.challengeToken }
+      : { userId: result.user.id };
+    return c.json(body_, 201);
   } catch (e: unknown) {
     const kind = extractErrorKind(e);
     if (kind === "registration_closed") {
