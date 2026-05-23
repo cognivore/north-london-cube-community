@@ -1579,7 +1579,9 @@ admin.get("/audit", async (c) => {
 // satisfied by the changes log, not by copying.
 
 type MergeChange =
-  | { kind: "update"; table: string; rowId: string; column: string; from: string }
+  // `where` is a column→value map identifying the row; supports composite
+  // primary keys like seats(pod_id, seat_index) which have no `id` column.
+  | { kind: "update"; table: string; where: Record<string, unknown>; column: string; from: unknown }
   | { kind: "delete"; table: string; rowJson: string }
   | { kind: "user_field"; field: "auth_state" | "profile"; userId: string; from: string };
 
@@ -1636,7 +1638,7 @@ admin.post("/users/:srcId/merge-into/:tgtId", async (c) => {
     }
     const rsvpUpdateIds = dbQuery<{ id: string }>(db, "SELECT id FROM rsvps WHERE user_id = ?", [srcId]);
     for (const r of rsvpUpdateIds) {
-      changes.push({ kind: "update", table: "rsvps", rowId: r.id, column: "user_id", from: srcId });
+      changes.push({ kind: "update", table: "rsvps", where: { id: r.id }, column: "user_id", from: srcId });
     }
     dbRun(db, "UPDATE rsvps SET user_id = ? WHERE user_id = ?", [tgtId, srcId]);
 
@@ -1652,16 +1654,21 @@ admin.post("/users/:srcId/merge-into/:tgtId", async (c) => {
     }
     const voteUpdateIds = dbQuery<{ id: string }>(db, "SELECT id FROM votes WHERE user_id = ?", [srcId]);
     for (const v of voteUpdateIds) {
-      changes.push({ kind: "update", table: "votes", rowId: v.id, column: "user_id", from: srcId });
+      changes.push({ kind: "update", table: "votes", where: { id: v.id }, column: "user_id", from: srcId });
     }
     dbRun(db, "UPDATE votes SET user_id = ? WHERE user_id = ?", [tgtId, srcId]);
 
     // --- straight reassignments. Capture before-values per row so revert can
-    //     restore. No UNIQUE-on-user constraints on these tables.
-    const reassign = (table: string, column: string) => {
-      const rows = dbQuery<{ id: string }>(db, `SELECT id FROM ${table} WHERE ${column} = ?`, [srcId]);
+    //     restore. `idCols` identifies a row; for tables with a composite PK
+    //     (seats: pod_id+seat_index) we record both columns.
+    const reassign = (table: string, column: string, idCols: ReadonlyArray<string>) => {
+      const rows = dbQuery<Record<string, unknown>>(
+        db, `SELECT ${idCols.join(", ")} FROM ${table} WHERE ${column} = ?`, [srcId],
+      );
       for (const r of rows) {
-        changes.push({ kind: "update", table, rowId: r.id, column, from: srcId });
+        const where: Record<string, unknown> = {};
+        for (const c of idCols) where[c] = r[c];
+        changes.push({ kind: "update", table, where, column, from: srcId });
       }
       dbRun(db, `UPDATE ${table} SET ${column} = ? WHERE ${column} = ?`, [tgtId, srcId]);
       return rows.length;
@@ -1671,13 +1678,13 @@ admin.post("/users/:srcId/merge-into/:tgtId", async (c) => {
       droppedRsvps: rsvpDeleteRows.length,
       votes:       voteUpdateIds.length,
       droppedVotes: voteDeleteRows.length,
-      cubes:       reassign("cubes",        "owner_id"),
-      enrollments: reassign("enrollments",  "host_id"),
-      pods:        reassign("pods",         "host_id"),
-      seats:       reassign("seats",        "user_id"),
-      matches_p1:  reassign("matches",      "player1_id"),
-      matches_p2:  reassign("matches",      "player2_id"),
-      audit_actor: reassign("audit_events", "actor_id"),
+      cubes:       reassign("cubes",        "owner_id",   ["id"]),
+      enrollments: reassign("enrollments",  "host_id",    ["id"]),
+      pods:        reassign("pods",         "host_id",    ["id"]),
+      seats:       reassign("seats",        "user_id",    ["pod_id", "seat_index"]),
+      matches_p1:  reassign("matches",      "player1_id", ["id"]),
+      matches_p2:  reassign("matches",      "player2_id", ["id"]),
+      audit_actor: reassign("audit_events", "actor_id",   ["id"]),
     };
 
     // --- target.profile: sum noShowCount. Capture target's previous profile.
@@ -1776,7 +1783,10 @@ admin.post("/user-merges/:mergeId/revert", async (c) => {
     for (let i = changes.length - 1; i >= 0; i--) {
       const ch = changes[i]!;
       if (ch.kind === "update") {
-        dbRun(db, `UPDATE ${ch.table} SET ${ch.column} = ? WHERE id = ?`, [ch.from, ch.rowId]);
+        const wcols = Object.keys(ch.where);
+        const wclause = wcols.map(c => `${c} = ?`).join(" AND ");
+        const wvals = wcols.map(c => ch.where[c]);
+        dbRun(db, `UPDATE ${ch.table} SET ${ch.column} = ? WHERE ${wclause}`, [ch.from, ...wvals]);
       } else if (ch.kind === "delete") {
         const parsed = JSON.parse(ch.rowJson) as Record<string, unknown>;
         const cols = Object.keys(parsed);
