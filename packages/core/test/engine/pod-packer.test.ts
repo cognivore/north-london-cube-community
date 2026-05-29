@@ -333,8 +333,8 @@ describe("Pod packer", () => {
     });
   });
 
-  describe("golden: format-mismatch users are excluded", () => {
-    it("user who accepts no selected format is excluded", () => {
+  describe("golden: format preferences are preferential, not strict", () => {
+    it("user who accepts no selected format is still seated (preferred users go first)", () => {
       resetIdCounter();
       const hostId = makeUserId(999);
       const cube = makeCube({
@@ -371,7 +371,50 @@ describe("Pod packer", () => {
         const mismatchExcluded = config.excluded.some(
           (e) => (e.userId as string) === (mismatchUser as string) && e.reason === "format_mismatch",
         );
-        expect(mismatchExcluded).toBe(true);
+        expect(mismatchExcluded).toBe(false);
+        // Pod size is 4 and host + 3 swiss-accepting users fit ahead of the
+        // mismatch user (no preference => sorted last). Mismatch user
+        // becomes waitlisted, not excluded.
+        const allSeatedIds = new Set(
+          config.pods.flatMap((p) => p.seats.map((s) => s.userId as string)),
+        );
+        expect(allSeatedIds.has(mismatchUser as string)).toBe(false);
+        expect(config.waitlisted.map((u) => u as string)).toContain(mismatchUser as string);
+      }
+    });
+
+    it("forces a 4-player pod on a cube whose normal min is 8", () => {
+      resetIdCounter();
+      const hostId = makeUserId(999);
+      const cube = makeCube({
+        ownerId: hostId,
+        minPodSize: 8 as EvenPodSize,
+        maxPodSize: 8 as EvenPodSize,
+      });
+
+      const rsvps = [
+        makeRsvpEntry(hostId, "2025-01-10T00:00:00Z"),
+        makeRsvpEntry(makeUserId(1), "2025-01-10T01:00:00Z"),
+        makeRsvpEntry(makeUserId(2), "2025-01-10T02:00:00Z"),
+        makeRsvpEntry(makeUserId(3), "2025-01-10T03:00:00Z"),
+      ];
+
+      const input: PackPodsInput = {
+        rsvps,
+        cubes: [{ cube, hostId, format: "team_draft_2v2" as DraftFormat }] as NonEmptyArray<
+          PackPodsInput["cubes"][number]
+        >,
+        venue: makeVenue({ capacity: 16 }),
+      };
+
+      const result = packPods(input);
+      expect(isOk(result)).toBe(true);
+
+      if (isOk(result)) {
+        const config = result.value;
+        expect(config.pods).toHaveLength(1);
+        expect(config.pods[0]!.seats).toHaveLength(4);
+        expect(config.pods[0]!.format).toBe("team_draft_2v2");
       }
     });
   });

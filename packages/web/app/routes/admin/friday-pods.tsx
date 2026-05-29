@@ -7,6 +7,22 @@ type Rsvp = { id: string; userId: string; state: string };
 type Player = { displayName: string; dciNumber: number | null };
 type Cube = { id: string; name: string; supportedFormats: string[] };
 
+// All draft formats; mirrors packages/core enums.DRAFT_FORMATS. Cube
+// `supportedFormats` is preferential — the packer will seat a forced format
+// even when nobody listed it as a preference — so the admin can pick any
+// option here. Cube-supported formats are grouped first as the suggestion.
+const ALL_DRAFT_FORMATS = [
+  "swiss_draft",
+  "team_draft_2v2",
+  "team_draft_3v3",
+  "team_draft_4v4",
+  "rochester",
+  "housman",
+  "grid",
+  "glimpse",
+  "sealed",
+] as const;
+
 export async function loader({ request, params }: { request: Request; params: { fridayId: string } }) {
   const ch = { headers: cookieHeader(request) };
   const usersRes = await fetch(`${SERVER_API_BASE}/api/admin/users`, { headers: cookieHeader(request) });
@@ -396,12 +412,16 @@ function PodEditor({
             className="rounded-sm border border-rule-heavy bg-paper px-2 py-1.5 text-sm text-ink mono"
             data-mono
           >
-            {cubeFormats.map(f => (
-              <option key={f} value={f}>{f}</option>
-            ))}
-            {!cubeFormats.includes(pod.format) && (
-              <option value={pod.format}>{pod.format} (current)</option>
-            )}
+            <optgroup label="Cube supports">
+              {cubeFormats.map(f => (
+                <option key={`s-${f}`} value={f}>{f}</option>
+              ))}
+            </optgroup>
+            <optgroup label="Force (preferential)">
+              {ALL_DRAFT_FORMATS.filter(f => !cubeFormats.includes(f)).map(f => (
+                <option key={`f-${f}`} value={f}>{f}</option>
+              ))}
+            </optgroup>
           </select>
         </div>
       </Form>

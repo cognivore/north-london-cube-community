@@ -65,11 +65,19 @@ type CubeEntry = {
   readonly format: DraftFormat;
 };
 
-/** Compute allowed pod sizes for a cube: intersection of [min..max] and {4,6,8}. */
-function allowedSizes(cube: Cube): ReadonlyArray<4 | 6 | 8> {
+/**
+ * Compute allowed pod sizes for a cube given how many eligible players are
+ * available. The cube's [min..max] range is preferential, not strict: when
+ * there aren't enough players to fill the cube's normal minimum, fall back
+ * to smaller valid sizes (down to 4) so admins can run a half-attended
+ * Friday — e.g. force a 4-player draft on a cube whose default min is 8.
+ */
+function allowedSizes(cube: Cube, eligibleCount: number): ReadonlyArray<4 | 6 | 8> {
   const minVal = cube.minPodSize as number;
   const maxVal = cube.maxPodSize as number;
-  return VALID_POD_SIZES.filter((s) => s >= minVal && s <= maxVal);
+  const preferred = VALID_POD_SIZES.filter((s) => s >= minVal && s <= maxVal);
+  if (preferred.some((s) => s <= eligibleCount)) return preferred;
+  return VALID_POD_SIZES.filter((s) => s <= maxVal && s <= eligibleCount);
 }
 
 /** Check whether a user accepts a given format (preferred or fallback). */
@@ -248,7 +256,7 @@ function* enumerateSinglePod(
   cubeEntry: CubeEntry,
   eligible: RsvpEntry[],
 ): Generator<{ pods: CandidatePod[]; excluded: Exclusion[] }> {
-  const sizes = allowedSizes(cubeEntry.cube);
+  const sizes = allowedSizes(cubeEntry.cube, eligible.length);
   const hostIdStr = cubeEntry.hostId as string;
 
   for (const size of sizes) {
@@ -303,8 +311,8 @@ function* enumerateTwoPods(
   cube2: CubeEntry,
   eligible: RsvpEntry[],
 ): Generator<{ pods: CandidatePod[]; excluded: Exclusion[] }> {
-  const sizes1 = allowedSizes(cube1.cube);
-  const sizes2 = allowedSizes(cube2.cube);
+  const sizes1 = allowedSizes(cube1.cube, eligible.length);
+  const sizes2 = allowedSizes(cube2.cube, eligible.length);
 
   for (const s1 of sizes1) {
     for (const s2 of sizes2) {
@@ -433,7 +441,11 @@ export function packPods(
     rsvpMap.set(r.userId as string, r);
   }
 
-  // Phase 1: Separate banned users and those who cannot play any selected format
+  // Phase 1: Exclude banned users. Format preferences are preferential, not
+  // strict — players who don't accept any selected format are still seated
+  // and the affinity scoring (preferred/accepted/neither) handles the
+  // ranking. This lets a 4-player Friday run a forced 2v2 or 4-way swiss
+  // even when nobody listed those as a preference.
   const excluded: Exclusion[] = [];
   const eligible: RsvpEntry[] = [];
 
@@ -442,16 +454,6 @@ export function packPods(
       excluded.push({ userId: r.userId, reason: "banned" });
       continue;
     }
-
-    // Check if user accepts at least one selected cube's format
-    const acceptsAny = cubes.some(
-      (c) => acceptsFormat(r.profile, c.format),
-    );
-    if (!acceptsAny) {
-      excluded.push({ userId: r.userId, reason: "format_mismatch" });
-      continue;
-    }
-
     eligible.push(r);
   }
 
