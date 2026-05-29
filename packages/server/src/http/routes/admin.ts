@@ -12,7 +12,7 @@ import {
 } from "../../repos/types.js";
 import {
   transition, unsafePositiveInt, unsafeRoundId, unsafeDuration,
-  packPods, isNonEmpty,
+  packPods, isNonEmpty, DRAFT_FORMATS,
   unsafeUserId, unsafeEmail, unsafeNonEmptyString, unsafeISO8601,
   unsafeNonNegativeInt, unsafeAuditEventId,
 } from "@cubehall/core";
@@ -283,12 +283,28 @@ admin.post("/users/:id/ban", async (c) => {
 });
 
 // POST /api/admin/fridays/:id/shuffle-seating — auto-assign seating using packPods.
-// Writes seats into existing pods, matched by cube_id. Uses each pod's current
-// `format` (which the admin can edit before shuffling). Returns the pack
-// error verbatim when it can't find a configuration so the admin can react.
+// Writes seats into existing pods, matched by cube_id. Body may include
+// `podFormats: [{ podId, format }]` to apply unsaved Format dropdown picks
+// before packing — cube.supportedFormats is advisory, so anything in the
+// DraftFormat enum is accepted. The chosen format is persisted to the pod.
 admin.post("/fridays/:id/shuffle-seating", async (c) => {
   const run = c.get("effectRuntime");
   const fridayId = c.req.param("id")!;
+  const body = await c.req.json().catch(() => null) as
+    | {
+        podFormats?: ReadonlyArray<{ podId?: unknown; format?: unknown }>;
+        onlyEmptyPods?: unknown;
+      }
+    | null;
+  const formatOverrides = new Map<string, DraftFormat>();
+  for (const raw of body?.podFormats ?? []) {
+    if (typeof raw?.podId !== "string" || typeof raw?.format !== "string") continue;
+    if (!DRAFT_FORMATS.includes(raw.format as DraftFormat)) {
+      return apiError(c, 400, "FORMAT_UNKNOWN", `Unknown draft format: ${raw.format}`);
+    }
+    formatOverrides.set(raw.podId, raw.format as DraftFormat);
+  }
+  const onlyEmptyPods = body?.onlyEmptyPods === true;
 
   try {
     const result = await run(
@@ -300,6 +316,7 @@ admin.post("/fridays/:id/shuffle-seating", async (c) => {
         const cubeRepo = yield* CubeRepo;
         const venueRepo = yield* VenueRepo;
         const userRepo = yield* UserRepo;
+        const seatRepo = yield* SeatRepo;
 
         const friday = yield* fridayRepo.findById(fridayId as any);
         if (!friday) return { error: "not_found" as const };
@@ -316,6 +333,13 @@ admin.post("/fridays/:id/shuffle-seating", async (c) => {
           if (rounds.some(r => r.state !== "pending")) {
             return { error: "round_started" as const, podId: pod.id as string };
           }
+        }
+
+        // Seat counts per pod, used by onlyEmptyPods to skip already-seated pods.
+        const podSeatCount = new Map<string, number>();
+        for (const pod of pods) {
+          const seats = yield* seatRepo.findByPod(pod.id);
+          podSeatCount.set(pod.id as string, seats.length);
         }
 
         const venue = yield* venueRepo.findById(friday.venueId);
@@ -346,7 +370,9 @@ admin.post("/fridays/:id/shuffle-seating", async (c) => {
         const cubes = yield* cubeRepo.findMany(cubeIds);
         const cubeEntries = pods.map(pod => {
           const cube = cubes.find(c => c.id === pod.cubeId);
-          return cube ? { cube, hostId: pod.hostId, format: pod.format } : null;
+          if (!cube) return null;
+          const overridden = formatOverrides.get(pod.id as string);
+          return { cube, hostId: pod.hostId, format: overridden ?? pod.format };
         }).filter((x): x is NonNullable<typeof x> => x !== null);
         if (!isNonEmpty(cubeEntries)) {
           return { error: "no_cubes" as const };
@@ -364,10 +390,15 @@ admin.post("/fridays/:id/shuffle-seating", async (c) => {
         });
 
         const updated: Array<{ podId: string; seated: number }> = [];
+        const skipped: Array<{ podId: string; reason: "already_seated" }> = [];
         yield* Effect.sync(() => {
           for (const planned of config.pods) {
             const pod = pods.find(p => p.cubeId === planned.cubeId);
             if (!pod) continue;
+            if (onlyEmptyPods && (podSeatCount.get(pod.id as string) ?? 0) > 0) {
+              skipped.push({ podId: pod.id as string, reason: "already_seated" });
+              continue;
+            }
             dbRun(db, "DELETE FROM seats WHERE pod_id = ?", [pod.id]);
             for (let i = 0; i < planned.seats.length; i++) {
               const seat = planned.seats[i]!;
@@ -381,10 +412,12 @@ admin.post("/fridays/:id/shuffle-seating", async (c) => {
                 "INSERT INTO seats (pod_id, seat_index, user_id, team) VALUES (?, ?, ?, ?)",
                 [pod.id, i, seat.userId, team]);
             }
-            // Keep template podSize in sync with the new seat count.
+            // Persist the format the packer used (admin's dropdown wins over
+            // pod.format in DB) so team labels render after reload, and keep
+            // pairings_template in sync with the new seat count.
             const newTemplate = buildPairingsTemplate(planned.format, planned.seats.length as 4 | 6 | 8);
-            dbRun(db, "UPDATE pods SET pairings_template = ? WHERE id = ?",
-              [JSON.stringify(newTemplate), pod.id]);
+            dbRun(db, "UPDATE pods SET format = ?, pairings_template = ? WHERE id = ?",
+              [planned.format, JSON.stringify(newTemplate), pod.id]);
             updated.push({ podId: pod.id as string, seated: planned.seats.length });
           }
           dbPersist();
@@ -393,6 +426,7 @@ admin.post("/fridays/:id/shuffle-seating", async (c) => {
         return {
           ok: true as const,
           updated,
+          skipped,
           waitlisted: config.waitlisted,
           excluded: config.excluded,
           summary: config.summary,
@@ -615,14 +649,15 @@ admin.put("/pods/:id/seats", async (c) => {
           return { error: "user_not_active" as const, missing };
         }
 
-        // Resolve format: if admin asked for a change, validate it against the
-        // cube's supportedFormats. Otherwise keep what's there.
+        // Resolve format: admin's pick wins. cube.supportedFormats is
+        // advisory (preferential) — the admin can force any draft format for
+        // a pod, e.g. running 2v2 on a Vintage cube whose default list is
+        // swiss_draft only. We still require the value to be a real
+        // DraftFormat (the enum) so we don't write garbage to the DB.
         let format: DraftFormat = pod.format;
         if (requestedFormat && requestedFormat !== pod.format) {
-          const cube = yield* cubeRepo.findById(pod.cubeId);
-          if (!cube) return { error: "cube_not_found" as const };
-          if (!cube.supportedFormats.includes(requestedFormat)) {
-            return { error: "format_unsupported" as const, format: requestedFormat, allowed: cube.supportedFormats };
+          if (!DRAFT_FORMATS.includes(requestedFormat as DraftFormat)) {
+            return { error: "format_unknown" as const, format: requestedFormat };
           }
           format = requestedFormat;
         }
@@ -682,7 +717,6 @@ admin.put("/pods/:id/seats", async (c) => {
     if ("error" in result) {
       if (result.error === "not_found") return apiError(c, 404, "NOT_FOUND", "Pod not found");
       if (result.error === "friday_not_found") return apiError(c, 404, "NOT_FOUND", "Friday not found");
-      if (result.error === "cube_not_found") return apiError(c, 404, "NOT_FOUND", "Cube not found");
       if (result.error === "friday_state") {
         return apiError(c, 409, "FRIDAY_STATE", `Friday is ${result.state} — seats are frozen`);
       }
@@ -695,8 +729,8 @@ admin.put("/pods/:id/seats", async (c) => {
       if (result.error === "user_not_active") {
         return apiError(c, 409, "USER_NOT_ACTIVE", `These users have no active RSVP: ${result.missing.join(", ")}`);
       }
-      if (result.error === "format_unsupported") {
-        return apiError(c, 409, "FORMAT_UNSUPPORTED", `Cube doesn't support ${result.format} (allowed: ${result.allowed.join(", ")})`);
+      if (result.error === "format_unknown") {
+        return apiError(c, 400, "FORMAT_UNKNOWN", `Unknown draft format: ${result.format}`);
       }
       if (result.error === "odd_needs_swiss") {
         return apiError(c, 400, "INVALID_POD_SIZE",

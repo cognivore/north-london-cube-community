@@ -75,16 +75,28 @@ export async function action({ request, params }: { request: Request; params: { 
     return { success: "Pod saved" };
   }
 
-  if (intent === "shuffle") {
+  if (intent === "shuffle" || intent === "seat-fill") {
+    const podFormatsRaw = formData.get("podFormats") as string | null;
+    let podFormats: Array<{ podId: string; format: string }> = [];
+    try {
+      podFormats = podFormatsRaw ? JSON.parse(podFormatsRaw) : [];
+    } catch {
+      podFormats = [];
+    }
     const res = await fetch(`${SERVER_API_BASE}/api/admin/fridays/${params.fridayId}/shuffle-seating`, {
       method: "POST",
       headers: { "Content-Type": "application/json", ...ch },
+      body: JSON.stringify({ podFormats, onlyEmptyPods: intent === "seat-fill" }),
     });
     if (!res.ok) {
       const body = await res.json().catch(() => ({}));
       return { error: body?.error?.message ?? `Shuffle failed (${res.status})` };
     }
-    return { success: "Seating shuffled — review and save if needed" };
+    return {
+      success: intent === "seat-fill"
+        ? "Empty pods seated — review and save if needed"
+        : "Seating shuffled — review and save if needed",
+    };
   }
 
   if (intent === "no-show") {
@@ -279,18 +291,44 @@ export default function FridayPods() {
       )}
 
       {editable && pods.length > 0 && (
-        <Form method="post" className="rounded-sm border border-amber bg-amber-soft p-4">
+        <Form
+          method="post"
+          className="rounded-sm border border-amber bg-amber-soft p-4"
+          onSubmit={() => {
+            const selects = document.querySelectorAll<HTMLSelectElement>('select[id^="pod-format-"]');
+            const formats: Array<{ podId: string; format: string }> = [];
+            for (const s of Array.from(selects)) {
+              const podId = s.id.replace("pod-format-", "");
+              if (podId) formats.push({ podId, format: s.value });
+            }
+            const input = document.getElementById("shuffle-pod-formats") as HTMLInputElement | null;
+            if (input) input.value = JSON.stringify(formats);
+          }}
+        >
           <p className="text-sm text-ink mb-2">
             <strong>Shuffle seating</strong> runs the auto-packer over the current pod formats and
-            replaces seats. Errors are surfaced verbatim — change a pod's format if the packer rejects.
+            replaces every seat. <strong>Seat players</strong> only fills pods that are currently empty
+            — existing seating is left alone. Both honor each pod's Format dropdown (cube support is advisory).
           </p>
-          <input type="hidden" name="intent" value="shuffle" />
-          <button
-            type="submit"
-            className="rounded-sm border border-amber bg-paper px-4 py-2 text-sm font-semibold text-amber hover:bg-paper-alt min-h-[44px]"
-          >
-            Shuffle seating
-          </button>
+          <input type="hidden" id="shuffle-pod-formats" name="podFormats" value="[]" />
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="submit"
+              name="intent"
+              value="seat-fill"
+              className="rounded-sm border border-amber bg-paper px-4 py-2 text-sm font-semibold text-amber hover:bg-paper-alt min-h-[44px]"
+            >
+              Seat players
+            </button>
+            <button
+              type="submit"
+              name="intent"
+              value="shuffle"
+              className="rounded-sm border border-amber bg-paper px-4 py-2 text-sm font-semibold text-amber hover:bg-paper-alt min-h-[44px]"
+            >
+              Shuffle seating
+            </button>
+          </div>
         </Form>
       )}
 
