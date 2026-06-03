@@ -74,7 +74,8 @@ export async function action({ request, params }: { request: Request; params: { 
 }
 
 export default function FridayDetail() {
-  const data = useLoaderData<typeof loader>();
+  const data = useLoaderData<typeof loader>() as any;
+  const venue = data.venue;
   const actionData = useActionData<typeof action>();
   const { friday, enrollments, rsvps, pods, allCubes, currentUser, coveredCount } = data;
 
@@ -123,7 +124,7 @@ export default function FridayDetail() {
       )}
 
       {/* Venue */}
-      <VenueCard variant="compact" />
+      {venue && <VenueCard variant="compact" venue={venue} />}
 
       {/* RSVP */}
       <section className="rounded-sm border border-rule bg-paper-alt p-4">

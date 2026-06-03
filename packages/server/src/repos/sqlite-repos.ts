@@ -49,6 +49,7 @@ type UserRow = {
 type VenueRow = {
   id: string; name: string; address: string; capacity: number;
   max_pods: number; house_credit_per_player: number; active: number;
+  map_url: string;
 };
 
 type CubeRow = {
@@ -145,6 +146,7 @@ function toVenue(r: VenueRow): Venue {
     maxPods: unsafePositiveInt(r.max_pods),
     houseCreditPerPlayer: unsafePence(r.house_credit_per_player),
     active: r.active === 1,
+    mapUrl: r.map_url ?? "",
   };
 }
 
@@ -400,10 +402,10 @@ const VenueRepoLive = Layer.succeed(VenueRepo, {
       try: async () => {
         const db = await getDb();
         run(db,
-          `INSERT INTO venues (id, name, address, capacity, max_pods, house_credit_per_player, active)
-           VALUES (?, ?, ?, ?, ?, ?, ?)`,
+          `INSERT INTO venues (id, name, address, capacity, max_pods, house_credit_per_player, active, map_url)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
           [venue.id, venue.name, venue.address, venue.capacity,
-           venue.maxPods, venue.houseCreditPerPlayer, venue.active ? 1 : 0],
+           venue.maxPods, venue.houseCreditPerPlayer, venue.active ? 1 : 0, venue.mapUrl],
         );
         persist();
         return venue;
@@ -417,9 +419,9 @@ const VenueRepoLive = Layer.succeed(VenueRepo, {
         const db = await getDb();
         run(db,
           `UPDATE venues SET name = ?, address = ?, capacity = ?, max_pods = ?,
-           house_credit_per_player = ?, active = ? WHERE id = ?`,
+           house_credit_per_player = ?, active = ?, map_url = ? WHERE id = ?`,
           [venue.name, venue.address, venue.capacity, venue.maxPods,
-           venue.houseCreditPerPlayer, venue.active ? 1 : 0, venue.id],
+           venue.houseCreditPerPlayer, venue.active ? 1 : 0, venue.mapUrl, venue.id],
         );
         persist();
         return venue;
@@ -1329,10 +1331,11 @@ export const seedVenues = Effect.tryPromise({
     if (existing.length > 0) return;
 
     run(db,
-      `INSERT INTO venues (id, name, address, capacity, max_pods, house_credit_per_player, active)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      ["d0000000-0000-0000-0000-000000000001", "Owl & Hitchhiker",
-       "471 Holloway Rd, Archway, London N7 6LE", 16, 2, 700, 1],
+      `INSERT INTO venues (id, name, address, capacity, max_pods, house_credit_per_player, active, map_url)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      ["d0000000-0000-0000-0000-000000000001", "The Owl & Hitchhiker",
+       "471 Holloway Rd, Archway, London N7 6LE", 16, 2, 700, 1,
+       "https://maps.app.goo.gl/ae9BhBH59TWZ5uu99"],
     );
     persist();
   },
@@ -1401,20 +1404,20 @@ export async function seed(): Promise<void> {
 
 /**
  * Idempotent fixup: the DB historically had two venues ("The Hitchhiker" and
- * "The Owl") with Palmers Green addresses. There is only one pub — The Owl &
- * Hitchhiker on Holloway Rd in Archway. This collapses any legacy duplicates
- * into the canonical venue row and corrects name + address. Safe to run on
- * every startup.
+ * "The Owl") with Palmers Green addresses. There is only one canonical pub —
+ * The Owl & Hitchhiker on Holloway Rd. This collapses any legacy duplicates
+ * into the canonical row, and backfills the canonical map_url if missing.
+ * Coordinator-edited fields (name / address / capacity / etc.) are never
+ * overwritten — venues are now editable via the admin UI.
  */
 async function migrateMergeVenues(): Promise<void> {
   const db = await getDb();
   const PRIMARY_ID = "d0000000-0000-0000-0000-000000000001";
   const SECONDARY_ID = "d0000000-0000-0000-0000-000000000002";
-  const CORRECT_NAME = "The Owl & Hitchhiker";
-  const CORRECT_ADDRESS = "471 Holloway Rd, Archway, London N7 6LE";
+  const CANONICAL_MAP_URL = "https://maps.app.goo.gl/ae9BhBH59TWZ5uu99";
 
-  const venues = query<{ id: string; name: string; address: string }>(db,
-    "SELECT id, name, address FROM venues", []);
+  const venues = query<{ id: string; map_url: string }>(db,
+    "SELECT id, map_url FROM venues", []);
   const primary = venues.find(v => v.id === PRIMARY_ID);
   const secondary = venues.find(v => v.id === SECONDARY_ID);
 
@@ -1427,9 +1430,9 @@ async function migrateMergeVenues(): Promise<void> {
     dirty = true;
   }
 
-  if (primary && (primary.name !== CORRECT_NAME || primary.address !== CORRECT_ADDRESS)) {
-    run(db, "UPDATE venues SET name = ?, address = ? WHERE id = ?",
-      [CORRECT_NAME, CORRECT_ADDRESS, PRIMARY_ID]);
+  if (primary && (!primary.map_url || primary.map_url.length === 0)) {
+    run(db, "UPDATE venues SET map_url = ? WHERE id = ?",
+      [CANONICAL_MAP_URL, PRIMARY_ID]);
     dirty = true;
   }
 

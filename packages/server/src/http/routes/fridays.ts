@@ -8,7 +8,7 @@ import { apiError, authMiddleware } from "../middleware.js";
 import { rsvpIn, rsvpOut } from "../../programs/rsvp.js";
 import { enrollCube, withdrawEnrollment } from "../../programs/enrollment.js";
 import {
-  FridayRepo, EnrollmentRepo, RsvpRepo, PodRepo,
+  FridayRepo, EnrollmentRepo, RsvpRepo, PodRepo, VenueRepo,
 } from "../../repos/types.js";
 import { Effect } from "effect";
 
@@ -44,17 +44,22 @@ function extractFridayState(e: unknown): string | undefined {
 
 const fridays = new Hono<AppEnv>();
 
-// GET /api/fridays — list upcoming
+// GET /api/fridays — list upcoming (with venue attached for app-side rendering)
 fridays.get("/", async (c) => {
   const run = c.get("effectRuntime");
   try {
-    const list = await run(
+    const { list, venues } = await run(
       Effect.gen(function* () {
         const fridayRepo = yield* FridayRepo;
-        return yield* fridayRepo.findUpcoming();
+        const venueRepo = yield* VenueRepo;
+        const list = yield* fridayRepo.findUpcoming();
+        const venues = yield* venueRepo.findAll();
+        return { list, venues };
       }),
     );
-    return c.json({ fridays: list });
+    const byId = new Map(venues.map((v: any) => [v.id, v]));
+    const fridaysWithVenue = list.map((f: any) => ({ ...f, venue: byId.get(f.venueId) ?? null }));
+    return c.json({ fridays: fridaysWithVenue });
   } catch {
     return apiError(c, 500, "INTERNAL", "Failed to list fridays");
   }
@@ -72,6 +77,7 @@ fridays.get("/:id", async (c) => {
         const enrollmentRepo = yield* EnrollmentRepo;
         const rsvpRepo = yield* RsvpRepo;
         const podRepo = yield* PodRepo;
+        const venueRepo = yield* VenueRepo;
 
         const friday = yield* fridayRepo.findById(id as any);
         if (!friday) return null;
@@ -79,8 +85,9 @@ fridays.get("/:id", async (c) => {
         const enrollments = yield* enrollmentRepo.findByFriday(friday.id);
         const rsvps = yield* rsvpRepo.findByFriday(friday.id);
         const pods = yield* podRepo.findByFriday(friday.id);
+        const venue = yield* venueRepo.findById(friday.venueId);
 
-        return { friday, enrollments, rsvps, pods };
+        return { friday, enrollments, rsvps, pods, venue };
       }),
     );
 

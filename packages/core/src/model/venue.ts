@@ -13,4 +13,5 @@ export type Venue = {
   readonly maxPods: PositiveInt;
   readonly houseCreditPerPlayer: Pence;
   readonly active: boolean;
+  readonly mapUrl: string;
 };

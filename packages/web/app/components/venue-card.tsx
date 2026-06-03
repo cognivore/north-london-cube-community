@@ -1,62 +1,78 @@
 /**
- * VenueCard — there is exactly one venue: The Owl & Hitchhiker.
+ * VenueCard — renders whatever venue the caller passes in.
  *
- *  - `full`    : iframe map embed + name + address + link buttons. Use on
+ *  - `full`    : large card with name, address, map link button. Use on
  *                landing / info sections.
- *  - `compact` : tiny strip with name + address + one Google Maps link. Use
- *                inside friday detail and other narrow contexts.
+ *  - `compact` : tiny strip with name + address + map link. Use inside friday
+ *                detail and other narrow contexts.
+ *
+ * mapUrl is treated as an opaque user-supplied string — coordinators paste
+ * whatever they like (OSM, Google, w3w, …) and it renders as a plain link.
  */
 
-const NAME = "The Owl & Hitchhiker";
-const ADDRESS = "471 Holloway Rd, Archway, London N7 6LE";
-const MAPS_URL = "https://maps.app.goo.gl/ae9BhBH59TWZ5uu99";
-const MAP_EMBED_SRC =
-  "https://maps.google.com/maps?q=471%20Holloway%20Rd%2C%20Archway%2C%20London%20N7%206LE&t=&z=16&ie=UTF8&iwloc=&output=embed";
+export type VenueCardData = {
+  name: string;
+  address: string;
+  mapUrl?: string | null;
+};
 
-export function VenueCard({ variant = "full" }: { variant?: "full" | "compact" }) {
+export function VenueCard({
+  variant = "full",
+  venue,
+}: {
+  variant?: "full" | "compact";
+  venue: VenueCardData;
+}) {
+  const { name, address, mapUrl } = venue;
+  const hasMap = !!mapUrl && mapUrl.length > 0;
+
   if (variant === "compact") {
-    return (
-      <a
-        href={MAPS_URL}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="flex items-center gap-3 rounded-sm border border-rule bg-paper-alt p-3 text-sm hover:bg-paper"
-      >
+    const inner = (
+      <>
         <MiniPubGlyph />
         <span className="flex-1">
-          <span className="block font-semibold text-ink">{NAME}</span>
-          <span className="block text-xs text-ink-faint">{ADDRESS}</span>
+          <span className="block font-semibold text-ink">{name}</span>
+          {address && <span className="block text-xs text-ink-faint">{address}</span>}
         </span>
-        <span className="text-xs text-dci-teal underline">Open in Maps</span>
-      </a>
+        {hasMap && <span className="text-xs text-dci-teal underline">Open in Maps</span>}
+      </>
+    );
+    if (hasMap) {
+      return (
+        <a
+          href={mapUrl!}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex items-center gap-3 rounded-sm border border-rule bg-paper-alt p-3 text-sm hover:bg-paper"
+        >
+          {inner}
+        </a>
+      );
+    }
+    return (
+      <div className="flex items-center gap-3 rounded-sm border border-rule bg-paper-alt p-3 text-sm">
+        {inner}
+      </div>
     );
   }
 
   return (
     <div className="overflow-hidden rounded-sm border border-rule-heavy bg-paper-alt">
-      <iframe
-        title="Owl & Hitchhiker on Google Maps"
-        src={MAP_EMBED_SRC}
-        width="100%"
-        height="240"
-        style={{ border: 0 }}
-        loading="lazy"
-        referrerPolicy="no-referrer-when-downgrade"
-        allowFullScreen
-      />
       <div className="space-y-2 p-4">
-        <h3 className="text-lg font-semibold text-ink">{NAME}</h3>
-        <p className="text-sm text-ink-soft">{ADDRESS}</p>
-        <div className="pt-1">
-          <a
-            href={MAPS_URL}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-block rounded-sm border border-dci-teal bg-paper px-3 py-2 text-sm font-medium text-dci-teal hover:bg-paper-alt"
-          >
-            Open in Google Maps
-          </a>
-        </div>
+        <h3 className="text-lg font-semibold text-ink">{name}</h3>
+        {address && <p className="text-sm text-ink-soft">{address}</p>}
+        {hasMap && (
+          <div className="pt-1">
+            <a
+              href={mapUrl!}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-block rounded-sm border border-dci-teal bg-paper px-3 py-2 text-sm font-medium text-dci-teal hover:bg-paper-alt"
+            >
+              Open in Maps
+            </a>
+          </div>
+        )}
       </div>
     </div>
   );

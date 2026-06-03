@@ -114,6 +114,7 @@ function parseVenueFields(body: Record<string, unknown> | null): {
   maxPods?: number;
   houseCreditPerPlayer?: number;
   active?: boolean;
+  mapUrl?: string;
 } | string {
   if (!body || typeof body !== "object") return "Body required";
   const out: any = {};
@@ -146,6 +147,12 @@ function parseVenueFields(body: Record<string, unknown> | null): {
   if (body.active !== undefined) {
     if (typeof body.active !== "boolean") return "active must be a boolean";
     out.active = body.active;
+  }
+  // mapUrl: arbitrary user-supplied string — no domain or shape validation.
+  // Coordinators decide what to paste (OSM, Google, Apple, w3w…).
+  if (body.mapUrl !== undefined) {
+    if (typeof body.mapUrl !== "string") return "mapUrl must be a string";
+    out.mapUrl = body.mapUrl.trim();
   }
   return out;
 }
@@ -180,6 +187,7 @@ admin.post("/venues", async (c) => {
           maxPods: unsafePositiveInt(parsed.maxPods!),
           houseCreditPerPlayer: unsafePence(parsed.houseCreditPerPlayer!),
           active: parsed.active ?? true,
+          mapUrl: parsed.mapUrl ?? "",
         };
         yield* venueRepo.create(venue);
 
@@ -232,7 +240,7 @@ admin.patch("/venues/:id", async (c) => {
         const before: Record<string, unknown> = {};
         const after: Record<string, unknown> = {};
         const merged: any = { ...existing };
-        for (const k of ["name", "address", "capacity", "maxPods", "houseCreditPerPlayer", "active"] as const) {
+        for (const k of ["name", "address", "capacity", "maxPods", "houseCreditPerPlayer", "active", "mapUrl"] as const) {
           if (parsed[k] !== undefined && parsed[k] !== (existing as any)[k]) {
             before[k] = (existing as any)[k];
             after[k] = parsed[k];
@@ -264,6 +272,61 @@ admin.patch("/venues/:id", async (c) => {
     return c.json({ venue: result.venue, changed: result.changed });
   } catch (e) {
     return apiError(c, 500, "INTERNAL", `Failed to update venue: ${e instanceof Error ? e.message : String(e)}`);
+  }
+});
+
+// POST /api/admin/fridays/:id/venue — reassign a Friday to a different venue.
+// Used when a one-off Friday is held at a non-canonical pub.
+admin.post("/fridays/:id/venue", async (c) => {
+  const actor = c.get("user");
+  const fridayId = c.req.param("id")!;
+  const body = await c.req.json().catch(() => null) as { venueId?: string } | null;
+  const venueId = body?.venueId?.trim();
+  if (!venueId) return apiError(c, 400, "BAD_REQUEST", "venueId required");
+
+  try {
+    const run = c.get("effectRuntime");
+    const result = await run(
+      Effect.gen(function* () {
+        const fridayRepo = yield* FridayRepo;
+        const venueRepo = yield* VenueRepo;
+        const auditRepo = yield* AuditRepo;
+        const rng = yield* RNG;
+        const clock = yield* Clock;
+
+        const friday = yield* fridayRepo.findById(fridayId as any);
+        if (!friday) return { error: "friday_not_found" as const };
+        const venue = yield* venueRepo.findById(venueId as any);
+        if (!venue) return { error: "venue_not_found" as const };
+
+        if (friday.venueId === venue.id) {
+          return { ok: true as const, friday, venue, changed: false };
+        }
+
+        const before = { venueId: friday.venueId };
+        const after = { venueId: venue.id };
+        const updated = { ...friday, venueId: venue.id };
+        yield* fridayRepo.update(updated);
+
+        yield* auditRepo.create({
+          id: unsafeAuditEventId(yield* rng.uuid()),
+          at: yield* clock.now(),
+          actorId: actor.id,
+          subject: { kind: "friday", id: fridayId },
+          action: "friday_venue_changed",
+          before,
+          after,
+        });
+        return { ok: true as const, friday: updated, venue, changed: true };
+      }),
+    );
+    if ("error" in result) {
+      const msg = result.error === "friday_not_found" ? "Friday not found" : "Venue not found";
+      return apiError(c, 404, "NOT_FOUND", msg);
+    }
+    return c.json({ friday: result.friday, venue: result.venue, changed: result.changed });
+  } catch (e) {
+    return apiError(c, 500, "INTERNAL", `Failed to change venue: ${e instanceof Error ? e.message : String(e)}`);
   }
 });
 

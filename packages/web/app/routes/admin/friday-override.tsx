@@ -2,9 +2,14 @@ import { Form, Link, useLoaderData, useActionData } from "react-router";
 import { api, cookieHeader, SERVER_API_BASE } from "../../lib/api";
 
 export async function loader({ request, params }: { request: Request; params: { fridayId: string } }) {
-  const result = await api.getFriday(params.fridayId, { headers: cookieHeader(request) });
-  if (!result.ok) throw new Response("Not found", { status: 404 });
-  return result.data;
+  const ch = { headers: cookieHeader(request) };
+  const [fridayResult, venuesResult] = await Promise.all([
+    api.getFriday(params.fridayId, ch),
+    api.listVenues(),
+  ]);
+  if (!fridayResult.ok) throw new Response("Not found", { status: 404 });
+  const venues = venuesResult.ok ? venuesResult.data.venues : [];
+  return { ...fridayResult.data, venues };
 }
 
 export async function action({ request, params }: { request: Request; params: { fridayId: string } }) {
@@ -51,6 +56,25 @@ export async function action({ request, params }: { request: Request; params: { 
     return { success: `State: ${body.from} → ${body.to}. Cron-email dedup cleared.` };
   }
 
+  if (intent === "change-venue") {
+    const venueId = formData.get("venueId") as string;
+    if (!venueId) return { error: "Pick a venue first." };
+    const res = await fetch(`${SERVER_API_BASE}/api/admin/fridays/${params.fridayId}/venue`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...ch },
+      body: JSON.stringify({ venueId }),
+    });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      return { error: body?.error?.message ?? `Change venue failed (${res.status})` };
+    }
+    return {
+      success: body?.changed
+        ? `Venue switched to ${body.venue?.name ?? "selected venue"}.`
+        : "Already on that venue — no change.",
+    };
+  }
+
   if (intent === "uncancel") {
     const res = await fetch(`${SERVER_API_BASE}/api/admin/fridays/${params.fridayId}/uncancel`, {
       method: "POST",
@@ -83,10 +107,11 @@ export async function action({ request, params }: { request: Request; params: { 
 }
 
 export default function FridayOverride() {
-  const data = useLoaderData<typeof loader>();
+  const data = useLoaderData<typeof loader>() as any;
   const actionData = useActionData<typeof action>();
-  const { friday } = data;
+  const { friday, venue, venues } = data;
   const stateKind = friday.state.kind;
+  const activeVenues = (venues as any[]).filter((v) => v.active || v.id === friday.venueId);
 
   const canForceLock = ["open", "locked"].includes(stateKind);
   const canForceComplete = !["complete", "cancelled", "scheduled"].includes(stateKind);
@@ -119,6 +144,41 @@ export default function FridayOverride() {
           Edit pods &rarr;
         </Link>
       )}
+
+      <Form method="post" className="space-y-3 rounded-sm border border-rule-heavy bg-paper-alt p-4">
+        <h2 className="text-lg font-semibold text-ink">Venue</h2>
+        <p className="text-sm text-ink-faint">
+          Currently at <span className="text-ink">{venue?.name ?? "(unknown venue)"}</span>
+          {venue?.address && <> &middot; {venue.address}</>}.
+          Reassign this Friday to any active venue (manage venues at
+          {" "}<Link to="/admin/venues" className="text-dci-teal underline">/admin/venues</Link>).
+        </p>
+        <div>
+          <label htmlFor="venueId" className="block text-sm font-medium text-ink-soft">
+            New venue
+          </label>
+          <select
+            id="venueId"
+            name="venueId"
+            defaultValue={friday.venueId}
+            required
+            className="mt-1 block w-full rounded-sm border border-rule-heavy bg-paper px-3 py-2.5 text-ink focus:border-dci-teal focus:ring-1 focus:ring-dci-teal focus:outline-none"
+          >
+            {activeVenues.map((v: any) => (
+              <option key={v.id} value={v.id}>
+                {v.name}{v.address ? ` — ${v.address}` : ""}{v.active ? "" : " (archived)"}
+              </option>
+            ))}
+          </select>
+        </div>
+        <input type="hidden" name="intent" value="change-venue" />
+        <button
+          type="submit"
+          className="rounded-sm border border-ok bg-paper px-4 py-2.5 font-semibold text-ok hover:bg-paper-alt min-h-[44px]"
+        >
+          Save venue
+        </button>
+      </Form>
 
       {canForceLock && (
         <Form method="post" className="space-y-3 rounded-sm border border-dci-teal bg-paper-alt p-4">

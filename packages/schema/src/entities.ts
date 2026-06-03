@@ -132,6 +132,7 @@ export const VenueSchema = z.object({
   maxPods: PositiveIntSchema,
   houseCreditPerPlayer: PenceSchema,
   active: z.boolean(),
+  mapUrl: z.string(),
 });
 
 // ---------------------------------------------------------------------------

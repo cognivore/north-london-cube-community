@@ -1,14 +1,21 @@
 import type { MetaFunction } from "react-router";
-import { Link, redirect } from "react-router";
+import { Link, redirect, useLoaderData } from "react-router";
 import { Icon } from "../components/Icon";
 import type { SilkIcon } from "../components/Icon";
 import { VenueCard } from "../components/venue-card";
 import { api, cookieHeader } from "../lib/api";
 
+const CANONICAL_VENUE_ID = "d0000000-0000-0000-0000-000000000001";
+
 export async function loader({ request }: { request: Request }) {
   const result = await api.me({ headers: cookieHeader(request) });
   if (result.ok) return redirect("/app");
-  return null;
+  const venuesRes = await api.listVenues();
+  const venues = venuesRes.ok ? venuesRes.data.venues : [];
+  const canonical = venues.find((v: any) => v.id === CANONICAL_VENUE_ID);
+  const active = venues.find((v: any) => v.active);
+  const venue = canonical ?? active ?? venues[0] ?? null;
+  return { venue };
 }
 
 export const meta: MetaFunction = () => [
@@ -27,6 +34,12 @@ export const meta: MetaFunction = () => [
 ];
 
 export default function Landing() {
+  const data = useLoaderData<typeof loader>() as { venue: any | null };
+  const venue = data?.venue;
+  const venueName = venue?.name ?? "Owl & Hitchhiker";
+  const venueAddress = venue?.address ?? "471 Holloway Rd, Archway N7 6LE";
+  const venueMapUrl = venue?.mapUrl || undefined;
+  const whereValue = venue ? `${venueName}, ${venueAddress}` : "Owl & Hitchhiker, 471 Holloway Rd, Archway N7";
   return (
     <div className="min-h-dvh flex flex-col bg-paper text-ink">
       {/* Site identity bar */}
@@ -69,10 +82,12 @@ export default function Landing() {
 
         <p className="mt-8 text-sm text-ink-faint">
           18:45 every Friday at{" "}
-          <a href="https://maps.app.goo.gl/ae9BhBH59TWZ5uu99" className="text-dci-teal underline" rel="noopener noreferrer">
-            Owl & Hitchhiker
-          </a>
-          , Archway N7
+          {venueMapUrl ? (
+            <a href={venueMapUrl} className="text-dci-teal underline" rel="noopener noreferrer">{venueName}</a>
+          ) : (
+            <span>{venueName}</span>
+          )}
+          {venueAddress && <>, {venueAddress.split(",").slice(-2).join(",").trim()}</>}
         </p>
       </header>
 
@@ -96,7 +111,7 @@ export default function Landing() {
           <div>
             <h2 className="text-2xl font-semibold text-ink">The framework</h2>
             <div className="mt-3 border border-rule-heavy bg-paper-alt">
-              <FrameworkRow icon="house" label="Where" value="Owl & Hitchhiker, 471 Holloway Rd, Archway N7" href="https://maps.app.goo.gl/ae9BhBH59TWZ5uu99" />
+              <FrameworkRow icon="house" label="Where" value={whereValue} href={venueMapUrl} />
               <FrameworkRow icon="calendar" label="When" value="Every Friday" />
               <FrameworkRow icon="door_in" label="Doors" value="18:30" />
               <FrameworkRow icon="time" label="P1P1" value="18:45" />
@@ -120,7 +135,7 @@ export default function Landing() {
           <div>
             <h2 className="text-2xl font-semibold text-ink">Find us</h2>
             <div className="mt-3">
-              <VenueCard />
+              {venue && <VenueCard venue={venue} />}
             </div>
           </div>
         </div>

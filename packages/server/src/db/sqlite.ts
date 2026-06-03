@@ -33,7 +33,8 @@ const SCHEMA = `
     capacity INTEGER NOT NULL DEFAULT 16,
     max_pods INTEGER NOT NULL DEFAULT 2,
     house_credit_per_player INTEGER NOT NULL DEFAULT 700,
-    active INTEGER NOT NULL DEFAULT 1
+    active INTEGER NOT NULL DEFAULT 1,
+    map_url TEXT NOT NULL DEFAULT ''
   );
 
   CREATE TABLE IF NOT EXISTS cubes (
@@ -227,9 +228,21 @@ export async function getDb(): Promise<Database> {
   }
 
   _db.run(SCHEMA);
+  migrate(_db);
   persist();
 
   return _db;
+}
+
+function hasColumn(db: Database, table: string, column: string): boolean {
+  const rows = query<{ name: string }>(db, `PRAGMA table_info(${table})`);
+  return rows.some(r => r.name === column);
+}
+
+function migrate(db: Database): void {
+  if (!hasColumn(db, "venues", "map_url")) {
+    db.run("ALTER TABLE venues ADD COLUMN map_url TEXT NOT NULL DEFAULT ''");
+  }
 }
 
 export function persist(): void {

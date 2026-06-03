@@ -85,7 +85,18 @@ export default function AppLayout() {
       <div className="border-b border-rule bg-paper-alt">
         <div className="mx-auto max-w-3xl px-4 py-2 flex items-center justify-between gap-3 text-xs text-ink-faint">
           <span>
-            <a href="https://maps.app.goo.gl/ae9BhBH59TWZ5uu99" className="underline" target="_blank" rel="noopener noreferrer">Owl &amp; Hitchhiker</a> &middot; Doors <span className="mono" data-mono>18:30</span> &middot; P1P1 <span className="mono" data-mono>18:45</span> &middot; <span className="mono" data-mono>£7</span>
+            {nextFriday?.venue ? (
+              nextFriday.venue.mapUrl ? (
+                <a href={nextFriday.venue.mapUrl} className="underline" target="_blank" rel="noopener noreferrer">
+                  {nextFriday.venue.name}
+                </a>
+              ) : (
+                <span>{nextFriday.venue.name}</span>
+              )
+            ) : (
+              <span>Cubehall</span>
+            )}
+            {" "}&middot; Doors <span className="mono" data-mono>18:30</span> &middot; P1P1 <span className="mono" data-mono>18:45</span> &middot; <span className="mono" data-mono>£7</span>
           </span>
           {nextFriday && (
             <Link
