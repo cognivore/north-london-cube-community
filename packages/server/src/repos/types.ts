@@ -9,7 +9,7 @@ import type {
   Pod, Seat, Round, Match, Session, InviteCode,
   AuditEvent, AuditEventInput,
   FridayState, RsvpState, PodState, RoundState, MatchResult,
-  UserProfile, PodConfiguration,
+  UserProfile, PodConfiguration, SystemRole,
 } from "@cubehall/core";
 import type {
   UserId, FridayId, CubeId, PodId, RoundId, MatchId,
@@ -38,7 +38,7 @@ export interface UserRepoService {
   readonly create: (user: User) => Effect.Effect<User, RepoError>;
   readonly update: (user: User) => Effect.Effect<User, RepoError>;
   readonly updateProfile: (id: UserId, profile: UserProfile) => Effect.Effect<void, RepoError>;
-  readonly updateRole: (id: UserId, role: "member" | "admin") => Effect.Effect<void, RepoError>;
+  readonly updateRole: (id: UserId, role: SystemRole) => Effect.Effect<void, RepoError>;
 }
 
 export class UserRepo extends Context.Tag("UserRepo")<UserRepo, UserRepoService>() {}

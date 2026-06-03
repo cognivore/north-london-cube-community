@@ -17,7 +17,8 @@ export type AuditSubjectKind =
   | "rsvp"
   | "vote"
   | "round"
-  | "match";
+  | "match"
+  | "venue";
 
 export type AuditSubject = {
   readonly kind: AuditSubjectKind;

@@ -39,6 +39,7 @@ export default [
       index("routes/admin/dashboard.tsx"),
       route("audit", "routes/admin/audit.tsx"),
       route("users", "routes/admin/users.tsx"),
+      route("venues", "routes/admin/venues.tsx"),
       route("email-test", "routes/admin/email-test.tsx"),
       route("settings", "routes/admin/settings.tsx"),
       route("fridays/:fridayId", "routes/admin/friday-override.tsx"),

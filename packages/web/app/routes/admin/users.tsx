@@ -45,9 +45,11 @@ export async function action({ request }: { request: Request }) {
     const userId = formData.get("userId") as string;
     const displayName = (formData.get("displayName") as string | null)?.trim();
     const email = (formData.get("email") as string | null)?.trim();
+    const role = (formData.get("role") as string | null)?.trim();
     const payload: Record<string, string> = {};
     if (displayName) payload.displayName = displayName;
     if (email) payload.email = email;
+    if (role) payload.role = role;
     if (Object.keys(payload).length === 0) {
       return { error: "Nothing to update" };
     }
@@ -170,6 +172,17 @@ export default function AdminUsers() {
                             defaultValue={u.email}
                             className="flex-1 min-w-[200px] rounded-sm border border-rule-heavy bg-paper px-2 py-1.5 text-sm text-ink"
                           />
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <label className="text-xs text-ink-soft w-20">Role</label>
+                          <select
+                            name="role"
+                            defaultValue={u.role}
+                            className="flex-1 min-w-[200px] rounded-sm border border-rule-heavy bg-paper px-2 py-1.5 text-sm text-ink"
+                          >
+                            <option value="member">member</option>
+                            <option value="coordinator">coordinator</option>
+                          </select>
                         </div>
                         <div className="flex items-center gap-2 pt-1">
                           <button

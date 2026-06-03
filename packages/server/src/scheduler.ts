@@ -8,18 +8,19 @@
  * Cron emails (London time):
  *   - Cube announcement: when Friday reaches "locked"/"confirmed" state
  *   - Wednesday 09:00: midweek heads-up to locked-in players for the upcoming Friday
- *   - Wednesday 09:00–09:30: auto-promote Friday open → locked so cube announcement can fire
  *   - Friday 09:00: morning reminder (locked = cube info, pending = find a +1)
  *   - Friday 16:30: "get out of the office" reminder to locked-in players
+ *
+ * Note: there is no Wednesday auto-lockout. Fridays stay "open" for RSVPs
+ * until a coordinator manually locks them via the admin UI; players can
+ * RSVP right up to the event itself.
  */
 
 import type { Effect } from "effect";
 import { getDb, query, run as dbRun, persist } from "./db/sqlite.js";
-import { advanceFriday } from "./programs/friday-lifecycle.js";
 import { renderEmail } from "./email-templates.js";
 
 export type RunEffect = <A, E>(effect: Effect.Effect<A, E, any>) => Promise<A>;
-let _runEffect: RunEffect | null = null;
 
 // ---------------------------------------------------------------------------
 // Config
@@ -197,46 +198,6 @@ async function checkCubeAnnouncements() {
         appUrl: appUrl(),
       });
       await sendEmail(a.email, e.subject, e.body);
-    }
-  }
-}
-
-/**
- * Wednesday 09:00–09:30 London — auto-promote open Friday to locked so the
- * cube announcement email can fire. The simplified state machine collapses
- * vote/enrollment_closed into the open → locked transition, so we only need
- * to advance from `open`. Stops on no-progress. Capped iterations.
- */
-async function checkFridayAutoPromote() {
-  if (!_runEffect) return;
-  const londonHour = getLondonHour();
-  const londonMinute = getLondonMinute();
-  if (londonHour !== 9 || londonMinute > 30) return;
-
-  const db = await getDb();
-  const fridayDate = addDays(getLondonDate(), 2);
-  const fridays = query<{ id: string; kind: string }>(db,
-    `SELECT id, json_extract(state, '$.kind') AS kind FROM fridays WHERE date = ?`,
-    [fridayDate]);
-
-  const advancing: ReadonlySet<string> = new Set(["open"]);
-
-  for (const fri of fridays) {
-    let kind = fri.kind;
-    for (let safety = 0; safety < 5; safety++) {
-      if (!advancing.has(kind)) break;
-      try {
-        await _runEffect(advanceFriday(fri.id));
-      } catch (e) {
-        console.error("Friday auto-promote failed:", { fridayId: fri.id, kind, e });
-        break;
-      }
-      const re = query<{ kind: string }>(db,
-        `SELECT json_extract(state, '$.kind') AS kind FROM fridays WHERE id = ?`,
-        [fri.id]);
-      const newKind = re[0]?.kind ?? kind;
-      if (newKind === kind) break;
-      kind = newKind;
     }
   }
 }
@@ -489,7 +450,6 @@ async function tick() {
   const dow = getLondonDayOfWeek();
   if (dow === 3) {
     try { await checkWednesdayReminder(); } catch (e) { console.error("Wednesday reminder failed:", e); }
-    try { await checkFridayAutoPromote(); } catch (e) { console.error("Friday auto-promote check failed:", e); }
   }
   if (dow === 5) {
     try { await checkMorningReminder(); } catch (e) { console.error("Morning reminder failed:", e); }
@@ -517,8 +477,7 @@ async function recoverGraceTimers() {
   }
 }
 
-export async function startScheduler(runEffect?: RunEffect) {
-  if (runEffect) _runEffect = runEffect;
+export async function startScheduler(_runEffect?: RunEffect) {
   await recoverGraceTimers();
 
   // Run immediately, then every 60s

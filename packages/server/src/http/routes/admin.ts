@@ -12,12 +12,13 @@ import {
 } from "../../repos/types.js";
 import {
   transition, unsafePositiveInt, unsafeRoundId, unsafeDuration,
-  packPods, isNonEmpty, DRAFT_FORMATS,
+  packPods, isNonEmpty, DRAFT_FORMATS, SYSTEM_ROLES,
   unsafeUserId, unsafeEmail, unsafeNonEmptyString, unsafeISO8601,
-  unsafeNonNegativeInt, unsafeAuditEventId,
+  unsafeNonNegativeInt, unsafeAuditEventId, unsafeVenueId, unsafePence,
 } from "@cubehall/core";
 import type {
   DraftFormat, FridayEvent, NonEmptyArray, PackPodsInput, UserProfile,
+  SystemRole, Venue,
 } from "@cubehall/core";
 import { isOk } from "@cubehall/core";
 import { Clock } from "../../capabilities/clock.js";
@@ -98,6 +99,171 @@ admin.put("/settings", async (c) => {
     return c.json({ ok: true, settings: await getAllSettings() });
   } catch (e) {
     return apiError(c, 500, "INTERNAL", `Failed to update settings: ${e instanceof Error ? e.message : String(e)}`);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Venues — coordinator-only create / override.
+// (Read is public via /api/venues.)
+// ---------------------------------------------------------------------------
+
+function parseVenueFields(body: Record<string, unknown> | null): {
+  name?: string;
+  address?: string;
+  capacity?: number;
+  maxPods?: number;
+  houseCreditPerPlayer?: number;
+  active?: boolean;
+} | string {
+  if (!body || typeof body !== "object") return "Body required";
+  const out: any = {};
+  if (body.name !== undefined) {
+    if (typeof body.name !== "string" || body.name.trim().length === 0) return "name must be a non-empty string";
+    out.name = body.name.trim();
+  }
+  if (body.address !== undefined) {
+    if (typeof body.address !== "string") return "address must be a string";
+    out.address = body.address.trim();
+  }
+  if (body.capacity !== undefined) {
+    if (typeof body.capacity !== "number" || !Number.isInteger(body.capacity) || body.capacity <= 0) {
+      return "capacity must be a positive integer";
+    }
+    out.capacity = body.capacity;
+  }
+  if (body.maxPods !== undefined) {
+    if (typeof body.maxPods !== "number" || !Number.isInteger(body.maxPods) || body.maxPods <= 0) {
+      return "maxPods must be a positive integer";
+    }
+    out.maxPods = body.maxPods;
+  }
+  if (body.houseCreditPerPlayer !== undefined) {
+    if (typeof body.houseCreditPerPlayer !== "number" || !Number.isInteger(body.houseCreditPerPlayer) || body.houseCreditPerPlayer < 0) {
+      return "houseCreditPerPlayer must be a non-negative integer (pence)";
+    }
+    out.houseCreditPerPlayer = body.houseCreditPerPlayer;
+  }
+  if (body.active !== undefined) {
+    if (typeof body.active !== "boolean") return "active must be a boolean";
+    out.active = body.active;
+  }
+  return out;
+}
+
+// POST /api/admin/venues — create a new venue.
+admin.post("/venues", async (c) => {
+  const actor = c.get("user");
+  const body = await c.req.json().catch(() => null) as Record<string, unknown> | null;
+  const parsed = parseVenueFields(body);
+  if (typeof parsed === "string") return apiError(c, 400, "BAD_REQUEST", parsed);
+  if (!parsed.name) return apiError(c, 400, "BAD_REQUEST", "name required");
+  if (parsed.address === undefined) return apiError(c, 400, "BAD_REQUEST", "address required");
+  if (parsed.capacity === undefined) return apiError(c, 400, "BAD_REQUEST", "capacity required");
+  if (parsed.maxPods === undefined) return apiError(c, 400, "BAD_REQUEST", "maxPods required");
+  if (parsed.houseCreditPerPlayer === undefined) return apiError(c, 400, "BAD_REQUEST", "houseCreditPerPlayer required");
+
+  try {
+    const run = c.get("effectRuntime");
+    const created = await run(
+      Effect.gen(function* () {
+        const venueRepo = yield* VenueRepo;
+        const auditRepo = yield* AuditRepo;
+        const rng = yield* RNG;
+        const clock = yield* Clock;
+
+        const id = unsafeVenueId(yield* rng.uuid());
+        const venue: Venue = {
+          id,
+          name: unsafeNonEmptyString(parsed.name!),
+          address: parsed.address!,
+          capacity: unsafePositiveInt(parsed.capacity!),
+          maxPods: unsafePositiveInt(parsed.maxPods!),
+          houseCreditPerPlayer: unsafePence(parsed.houseCreditPerPlayer!),
+          active: parsed.active ?? true,
+        };
+        yield* venueRepo.create(venue);
+
+        yield* auditRepo.create({
+          id: unsafeAuditEventId(yield* rng.uuid()),
+          at: yield* clock.now(),
+          actorId: actor.id,
+          subject: { kind: "venue", id },
+          action: "venue_created",
+          before: null,
+          after: {
+            name: venue.name,
+            address: venue.address,
+            capacity: venue.capacity,
+            maxPods: venue.maxPods,
+            houseCreditPerPlayer: venue.houseCreditPerPlayer,
+            active: venue.active,
+          } as any,
+        });
+        return venue;
+      }),
+    );
+    return c.json({ venue: created }, 201);
+  } catch (e) {
+    return apiError(c, 500, "INTERNAL", `Failed to create venue: ${e instanceof Error ? e.message : String(e)}`);
+  }
+});
+
+// PATCH /api/admin/venues/:id — override any subset of fields on a venue.
+admin.patch("/venues/:id", async (c) => {
+  const actor = c.get("user");
+  const venueId = c.req.param("id")!;
+  const body = await c.req.json().catch(() => null) as Record<string, unknown> | null;
+  const parsed = parseVenueFields(body);
+  if (typeof parsed === "string") return apiError(c, 400, "BAD_REQUEST", parsed);
+  if (Object.keys(parsed).length === 0) return apiError(c, 400, "BAD_REQUEST", "Nothing to update");
+
+  try {
+    const run = c.get("effectRuntime");
+    const result = await run(
+      Effect.gen(function* () {
+        const venueRepo = yield* VenueRepo;
+        const auditRepo = yield* AuditRepo;
+        const rng = yield* RNG;
+        const clock = yield* Clock;
+
+        const existing = yield* venueRepo.findById(venueId as any);
+        if (!existing) return { error: "not_found" as const };
+
+        const before: Record<string, unknown> = {};
+        const after: Record<string, unknown> = {};
+        const merged: any = { ...existing };
+        for (const k of ["name", "address", "capacity", "maxPods", "houseCreditPerPlayer", "active"] as const) {
+          if (parsed[k] !== undefined && parsed[k] !== (existing as any)[k]) {
+            before[k] = (existing as any)[k];
+            after[k] = parsed[k];
+            merged[k] = parsed[k];
+          }
+        }
+        if (Object.keys(after).length === 0) {
+          return { ok: true as const, venue: existing, changed: false };
+        }
+        if (parsed.name !== undefined) merged.name = unsafeNonEmptyString(parsed.name);
+        if (parsed.capacity !== undefined) merged.capacity = unsafePositiveInt(parsed.capacity);
+        if (parsed.maxPods !== undefined) merged.maxPods = unsafePositiveInt(parsed.maxPods);
+        if (parsed.houseCreditPerPlayer !== undefined) merged.houseCreditPerPlayer = unsafePence(parsed.houseCreditPerPlayer);
+
+        yield* venueRepo.update(merged);
+        yield* auditRepo.create({
+          id: unsafeAuditEventId(yield* rng.uuid()),
+          at: yield* clock.now(),
+          actorId: actor.id,
+          subject: { kind: "venue", id: venueId },
+          action: "venue_updated",
+          before: before as any,
+          after: after as any,
+        });
+        return { ok: true as const, venue: merged, changed: true };
+      }),
+    );
+    if ("error" in result) return apiError(c, 404, "NOT_FOUND", "Venue not found");
+    return c.json({ venue: result.venue, changed: result.changed });
+  } catch (e) {
+    return apiError(c, 500, "INTERNAL", `Failed to update venue: ${e instanceof Error ? e.message : String(e)}`);
   }
 });
 
@@ -1111,25 +1277,30 @@ admin.post("/users", async (c) => {
   }
 });
 
-// PATCH /api/admin/users/:id — update displayName and/or email. Used to fill in
-// the real email of a walk-in created earlier with a placeholder.
+// PATCH /api/admin/users/:id — update displayName, email, and/or role. Used to
+// fill in the real email of a walk-in created earlier with a placeholder, or
+// to promote a member to coordinator.
 admin.patch("/users/:id", async (c) => {
   const actor = c.get("user");
   const userId = c.req.param("id")!;
   if (userId === BYE_USER_ID) return apiError(c, 400, "BAD_REQUEST", "Cannot edit BYE user");
 
   const body = await c.req.json().catch(() => null) as
-    { displayName?: string; email?: string } | null;
+    { displayName?: string; email?: string; role?: string } | null;
   if (!body) return apiError(c, 400, "BAD_REQUEST", "Body required");
 
   const nextDisplayName = body.displayName?.trim();
   const nextEmail = body.email?.trim().toLowerCase();
+  const nextRole = body.role?.trim() as SystemRole | undefined;
 
   if (nextDisplayName !== undefined && nextDisplayName.length === 0) {
     return apiError(c, 400, "BAD_REQUEST", "displayName cannot be empty");
   }
   if (nextEmail !== undefined && !EMAIL_RE.test(nextEmail)) {
     return apiError(c, 400, "BAD_REQUEST", "Invalid email");
+  }
+  if (nextRole !== undefined && !SYSTEM_ROLES.includes(nextRole)) {
+    return apiError(c, 400, "BAD_REQUEST", `role must be one of: ${SYSTEM_ROLES.join(", ")}`);
   }
 
   try {
@@ -1163,6 +1334,10 @@ admin.patch("/users/:id", async (c) => {
           before.email = user.email;
           after.email = nextEmail;
         }
+        if (nextRole !== undefined && nextRole !== user.role) {
+          before.role = user.role;
+          after.role = nextRole;
+        }
         if (Object.keys(after).length === 0) {
           return { ok: true as const, user, changed: false };
         }
@@ -1173,6 +1348,7 @@ admin.patch("/users/:id", async (c) => {
             ? unsafeNonEmptyString(nextDisplayName)
             : user.displayName,
           email: nextEmail !== undefined ? unsafeEmail(nextEmail) : user.email,
+          role: nextRole !== undefined ? nextRole : user.role,
         };
         yield* userRepo.update(updated);
 
