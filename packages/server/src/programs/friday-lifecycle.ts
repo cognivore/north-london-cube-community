@@ -12,6 +12,7 @@ import {
   unsafeEvenPodSize, unsafeDuration,
   isOk, isNonEmpty,
   generatePairings,
+  selectCubesByRecency, decidePodCount,
 } from "@cubehall/core";
 import type {
   Friday, Enrollment, Cube,
@@ -25,7 +26,7 @@ import { Logger } from "../capabilities/logger.js";
 import { EventBus } from "../capabilities/event-bus.js";
 import {
   FridayRepo, EnrollmentRepo,
-  CubeRepo, VenueRepo, PodRepo, SeatRepo, RoundRepo, MatchRepo, UserRepo,
+  CubeRepo, VenueRepo, PodRepo, SeatRepo, RoundRepo, MatchRepo, UserRepo, RsvpRepo,
 } from "../repos/types.js";
 import type { RepoError } from "../repos/types.js";
 
@@ -91,9 +92,11 @@ export const advanceFriday = (fridayId: string) =>
     const fridayRepo = yield* FridayRepo;
     const enrollmentRepo = yield* EnrollmentRepo;
     const cubeRepo = yield* CubeRepo;
+    const venueRepo = yield* VenueRepo;
     const podRepo = yield* PodRepo;
     const roundRepo = yield* RoundRepo;
     const userRepo = yield* UserRepo;
+    const rsvpRepo = yield* RsvpRepo;
 
     const fid = unsafeFridayId(fridayId);
     const friday = yield* fridayRepo.findById(fid);
@@ -118,11 +121,11 @@ export const advanceFriday = (fridayId: string) =>
       }
 
       case "open": {
-        // Close enrollments + pick the single least-recently-played cube +
-        // form pods, all as one transition. No vote step; the algorithm is
-        // deterministic. Other enrolled hosts are emailed asking them to
-        // bring their cube as backup in case we fire a second pod on the
-        // night.
+        // Close enrollments + pick the N least-recently-played cubes (one per
+        // pod) + form empty pods. Seat assignment is a separate admin step.
+        // Hosts whose cubes were picked get an email asking them to bring the
+        // cube + tokens + spare sleeves; hosts whose cubes weren't picked get
+        // a heads-up that they don't need to bring it (but may anyway).
         const enrollments = yield* enrollmentRepo.findActiveByFriday(fid);
         if (enrollments.length === 0) {
           const cancelResult = transition(friday.state, { kind: "cancel_no_cubes" });
@@ -136,45 +139,73 @@ export const advanceFriday = (fridayId: string) =>
           return updated;
         }
 
-        const cubes = yield* cubeRepo.findMany(enrollments.map(e => e.cubeId));
-        const sorted = sortEnrollmentsByRecency(enrollments, cubes);
-        const winner = sorted[0]!;
-        const backups = sorted.slice(1);
+        const venue = yield* venueRepo.findById(friday.venueId);
+        if (!venue) {
+          return yield* Effect.fail<FridayLifecycleError>({ kind: "venue_not_found" });
+        }
 
-        // Idempotency: if pods already exist for this Friday, skip creation.
+        // "Locked-in" attendees drive the pod count. We include `seated` too
+        // because by the day-of some pods may already be seated by an admin
+        // who is re-running the lock to add a late-bumped second cube.
+        const attendeeRows = yield* rsvpRepo.findActiveByFriday(fid);
+        const attendeeCount = attendeeRows.filter(
+          r => r.state === "locked" || r.state === "seated",
+        ).length;
+
+        const cubes = yield* cubeRepo.findMany(enrollments.map(e => e.cubeId));
+        const podCount = decidePodCount({
+          attendees: attendeeCount,
+          enrollments: enrollments.length,
+          maxPodsAtVenue: venue.maxPods as number,
+        });
+
+        // If we have enrollments but nobody locked in yet (e.g. admin lock at
+        // a dead hour), still fire one pod so the cube ladder progresses.
+        const effectivePodCount = Math.max(podCount, 1);
+
+        const { selected, notSelected } = selectCubesByRecency(
+          enrollments,
+          cubes,
+          effectivePodCount,
+        );
+
+        // Idempotency: if pods already exist for this Friday, skip creation
+        // but still run the lock transition + emails if state allows.
         const existingPods = yield* podRepo.findByFriday(fid);
         if (existingPods.length === 0) {
-          const winnerCube = cubes.find(c => c.id === winner.cubeId);
-          const format = (winnerCube?.supportedFormats[0] ?? "swiss_draft") as DraftFormat;
-          const initialSize: 4 | 6 | 8 =
-            format === "team_draft_3v3" ? 6 :
-            format === "team_draft_4v4" ? 8 :
-            4;
-          const template = buildPairingsTemplate(format, initialSize);
-          const podId = unsafePodId(yield* rng.uuid());
-          yield* podRepo.create({
-            id: podId,
-            fridayId: fid,
-            cubeId: winner.cubeId,
-            hostId: winner.hostId,
-            format,
-            seats: [] as ReadonlyArray<any>,
-            state: "drafting",
-            pairingsTemplate: template,
-          });
-          for (let r = 1; r <= template.rounds; r++) {
-            const roundId = unsafeRoundId(yield* rng.uuid());
-            yield* roundRepo.create({
-              id: roundId,
-              podId,
-              roundNumber: unsafePositiveInt(r),
-              state: "pending",
-              startedAt: null,
-              endedAt: null,
-              timeLimit: unsafeDuration(3000),
-              extensions: [],
-              timer: { kind: "not_started" },
+          for (const enr of selected) {
+            const cube = cubes.find(c => c.id === enr.cubeId);
+            const format = (cube?.supportedFormats[0] ?? "swiss_draft") as DraftFormat;
+            const initialSize: 4 | 6 | 8 =
+              format === "team_draft_3v3" ? 6 :
+              format === "team_draft_4v4" ? 8 :
+              4;
+            const template = buildPairingsTemplate(format, initialSize);
+            const podId = unsafePodId(yield* rng.uuid());
+            yield* podRepo.create({
+              id: podId,
+              fridayId: fid,
+              cubeId: enr.cubeId,
+              hostId: enr.hostId,
+              format,
+              seats: [] as ReadonlyArray<any>,
+              state: "drafting",
+              pairingsTemplate: template,
             });
+            for (let r = 1; r <= template.rounds; r++) {
+              const roundId = unsafeRoundId(yield* rng.uuid());
+              yield* roundRepo.create({
+                id: roundId,
+                podId,
+                roundNumber: unsafePositiveInt(r),
+                state: "pending",
+                startedAt: null,
+                endedAt: null,
+                timeLimit: unsafeDuration(3000),
+                extensions: [],
+                timer: { kind: "not_started" },
+              });
+            }
           }
         }
 
@@ -184,14 +215,16 @@ export const advanceFriday = (fridayId: string) =>
         }
         updated = { ...friday, state: lockResult.value, lockedAt: now };
         yield* fridayRepo.update(updated);
-        yield* logger.info("Friday locked (cube picked + pod formed)", {
-          fridayId, winnerCubeId: winner.cubeId, backups: backups.length,
+        yield* logger.info("Friday locked (cubes picked + pods formed)", {
+          fridayId,
+          selectedCubeIds: selected.map(e => e.cubeId as string),
+          notSelectedCount: notSelected.length,
+          attendeeCount,
+          podCount: selected.length,
         });
         yield* eventBus.publish({ kind: "friday.locked", fridayId: fid });
 
-        if (backups.length > 0) {
-          yield* sendBackupHostEmails(friday.date, winner, backups, cubes, userRepo);
-        }
+        yield* sendCubeHostEmails(friday.date, selected, notSelected, cubes, userRepo);
         return updated;
       }
 
@@ -235,6 +268,7 @@ export const advanceFriday = (fridayId: string) =>
           const rounds = yield* roundRepo.findByPod(p.id);
           if (rounds.length > 0 && rounds.every(r => r.state === "complete")) {
             yield* podRepo.updateState(p.id, "complete");
+            yield* bumpCubeLastRunAt(p.cubeId, now, cubeRepo, logger);
             yield* logger.info("Pod promoted to complete (all rounds done)", { podId: p.id });
             podStates.set(p.id as string, "complete");
           } else {
@@ -383,6 +417,9 @@ export const completeRound = (podId: string, roundNumber: number) =>
     const allRoundsComplete = allRounds.every(r => r.state === "complete");
     if (allRoundsComplete) {
       yield* podRepo.updateState(pid, "complete");
+      const cubeRepo = yield* CubeRepo;
+      const pod = yield* podRepo.findById(pid);
+      if (pod) yield* bumpCubeLastRunAt(pod.cubeId, now, cubeRepo, logger);
       yield* logger.info("Pod completed", { podId });
     }
 
@@ -431,39 +468,23 @@ function makeTemplate(pod: PlannedPod): PairingsTemplate {
 }
 
 /**
- * Sort enrollments by least-recently-played cube. Cubes that have never been
- * played sort first (oldest). Alphabetical tiebreaker on cube name.
+ * Email each enrolled cube host with the morning verdict:
+ *  - hosts whose cube was picked get `selected_host`  — bring cube + tokens + sleeves
+ *  - hosts whose cube wasn't picked get `not_selected_host` — no need to bring, but may
+ *
+ * Best-effort: a failed send is logged and swallowed so we don't block the
+ * lifecycle transition. Recipients are deduped by user id so a host who
+ * enrolls multiple cubes only gets one email per category.
  */
-function sortEnrollmentsByRecency(
-  enrollments: ReadonlyArray<Enrollment>,
-  cubes: ReadonlyArray<Cube>,
-): ReadonlyArray<Enrollment> {
-  return [...enrollments].sort((a, b) => {
-    const cubeA = cubes.find(c => c.id === a.cubeId);
-    const cubeB = cubes.find(c => c.id === b.cubeId);
-    const lastA = cubeA?.lastRunAt ? Date.parse(cubeA.lastRunAt) : 0;
-    const lastB = cubeB?.lastRunAt ? Date.parse(cubeB.lastRunAt) : 0;
-    if (lastA !== lastB) return lastA - lastB;
-    return (cubeA?.name ?? "").localeCompare(cubeB?.name ?? "");
-  });
-}
-
-/**
- * Email each backup-cube host asking them to bring their cube along in case
- * a second pod fires. Best-effort: a failed send is logged and swallowed so
- * we don't block the lifecycle transition.
- */
-function sendBackupHostEmails(
+function sendCubeHostEmails(
   fridayDate: string,
-  winner: Enrollment,
-  backups: ReadonlyArray<Enrollment>,
+  selected: ReadonlyArray<Enrollment>,
+  notSelected: ReadonlyArray<Enrollment>,
   cubes: ReadonlyArray<Cube>,
   userRepo: ReturnType<typeof UserRepo extends { Service: infer S } ? () => S : never>,
 ) {
   return Effect.gen(function* () {
     const logger = yield* Logger;
-    const winnerCube = cubes.find(c => c.id === winner.cubeId);
-    const winnerCubeName = winnerCube?.name ?? "the picked cube";
 
     const scheduler = yield* Effect.tryPromise({
       try: () => import("../scheduler.js"),
@@ -474,28 +495,78 @@ function sendBackupHostEmails(
       catch: (e) => ({ kind: "import_failed" as const, cause: e }),
     }).pipe(Effect.catchAll(() => Effect.succeed(null)));
     if (!scheduler || !tmpl) {
-      yield* logger.warn("Backup host emails skipped: helper modules unavailable", {});
+      yield* logger.warn("Cube host emails skipped: helper modules unavailable", {});
       return;
     }
 
-    for (const enr of backups) {
+    const selectedCubeNames = selected
+      .map(e => cubes.find(c => c.id === e.cubeId)?.name as string | undefined)
+      .filter((n): n is string => Boolean(n))
+      .join(", ") || "TBD";
+
+    // Hosts who got at least one cube picked don't also receive the
+    // "not selected" copy for any side enrollment.
+    const selectedHostIds = new Set(selected.map(e => e.hostId as string));
+
+    for (const enr of selected) {
       const host = yield* (userRepo as any).findById(enr.hostId);
       if (!host || !host.email) continue;
       const ownCube = cubes.find(c => c.id === enr.cubeId);
-      const rendered = tmpl.renderEmail("backup_cube_host", {
+      const rendered = tmpl.renderEmail("selected_host", {
         displayName: host.displayName,
         date: fridayDate,
-        cubeNames: winnerCubeName,
+        cubeNames: selectedCubeNames,
         appUrl: scheduler.appUrl(),
         ownCubeName: ownCube?.name ?? "your cube",
-        winningCubeName: winnerCubeName,
       });
       yield* Effect.tryPromise({
         try: () => scheduler.sendEmail(host.email, rendered.subject, rendered.body),
         catch: (e) => ({ kind: "email_failed" as const, cause: e }),
       }).pipe(Effect.catchAll((err) =>
-        logger.warn("Backup host email failed", { hostId: enr.hostId, err }),
+        logger.warn("Selected host email failed", { hostId: enr.hostId, err }),
       ));
     }
+
+    for (const enr of notSelected) {
+      if (selectedHostIds.has(enr.hostId as string)) continue;
+      const host = yield* (userRepo as any).findById(enr.hostId);
+      if (!host || !host.email) continue;
+      const ownCube = cubes.find(c => c.id === enr.cubeId);
+      const rendered = tmpl.renderEmail("not_selected_host", {
+        displayName: host.displayName,
+        date: fridayDate,
+        cubeNames: selectedCubeNames,
+        appUrl: scheduler.appUrl(),
+        ownCubeName: ownCube?.name ?? "your cube",
+      });
+      yield* Effect.tryPromise({
+        try: () => scheduler.sendEmail(host.email, rendered.subject, rendered.body),
+        catch: (e) => ({ kind: "email_failed" as const, cause: e }),
+      }).pipe(Effect.catchAll((err) =>
+        logger.warn("Not-selected host email failed", { hostId: enr.hostId, err }),
+      ));
+    }
+  });
+}
+
+/**
+ * Mark a cube as having just been played. Called on pod completion so the
+ * least-recently-played sort actually rotates the schedule. Idempotent:
+ * latest write wins, which is the right semantics for "most recent run."
+ */
+function bumpCubeLastRunAt(
+  cubeId: Cube["id"],
+  at: string,
+  cubeRepo: ReturnType<typeof CubeRepo extends { Service: infer S } ? () => S : never>,
+  logger: ReturnType<typeof Logger extends { Service: infer S } ? () => S : never>,
+) {
+  return Effect.gen(function* () {
+    const cube = yield* (cubeRepo as any).findById(cubeId);
+    if (!cube) {
+      yield* (logger as any).warn("bumpCubeLastRunAt: cube not found", { cubeId });
+      return;
+    }
+    yield* (cubeRepo as any).update({ ...cube, lastRunAt: at });
+    yield* (logger as any).info("Cube lastRunAt bumped", { cubeId, at });
   });
 }

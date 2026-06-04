@@ -5,15 +5,18 @@
  *   RSVP pairs up → both "confirmed" → 30-min timer per person.
  *   During grace: can withdraw.  After grace: runMatching() locks them, sends email.
  *
- * Cron emails (London time):
+ * Cron emails / lifecycle ticks (London time):
  *   - Cube announcement: when Friday reaches "locked"/"confirmed" state
  *   - Wednesday 09:00: midweek heads-up to locked-in players for the upcoming Friday
+ *   - Friday 08:00: auto-lock the day's Friday — picks N least-recently-played
+ *     cubes (one per pod), freezes enrollments, and emails cube hosts
+ *     (selected hosts: bring cube + tokens + sleeves; not-selected hosts: no
+ *     need to bring, but may anyway).
  *   - Friday 09:00: morning reminder (locked = cube info, pending = find a +1)
  *   - Friday 16:30: "get out of the office" reminder to locked-in players
  *
- * Note: there is no Wednesday auto-lockout. Fridays stay "open" for RSVPs
- * until a coordinator manually locks them via the admin UI; players can
- * RSVP right up to the event itself.
+ * A coordinator can still lock earlier via POST /api/lifecycle/fridays/:id/advance;
+ * the 08:00 job is the fallback for the common case where no admin intervenes.
  */
 
 import type { Effect } from "effect";
@@ -21,6 +24,16 @@ import { getDb, query, run as dbRun, persist } from "./db/sqlite.js";
 import { renderEmail } from "./email-templates.js";
 
 export type RunEffect = <A, E>(effect: Effect.Effect<A, E, any>) => Promise<A>;
+
+let activeRunEffect: RunEffect | null = null;
+
+/**
+ * Test-only seam: wire the effect runtime without spinning up the 60-second
+ * tick loop. Production code should call `startScheduler(runEffect)` instead.
+ */
+export function _setRunEffectForTests(runEffect: RunEffect): void {
+  activeRunEffect = runEffect;
+}
 
 // ---------------------------------------------------------------------------
 // Config
@@ -251,6 +264,46 @@ export async function checkWednesdayReminder() {
   }
 }
 
+/**
+ * Friday 08:00 London — auto-lock the day's Friday(s).
+ *
+ * For every Friday whose date is today and whose state is still "open", run
+ * `advanceFriday` once. The lifecycle picks the N least-recently-played cubes
+ * (one per pod, scaled to the locked-in attendee count and venue.maxPods),
+ * forms the pods, freezes enrollments, and emails selected vs. not-selected
+ * cube hosts.
+ *
+ * Idempotency is structural: once advanced, the Friday is in "locked" state,
+ * so the next minute's tick skips it.
+ */
+export async function checkFridayMorningLock() {
+  const londonHour = getLondonHour();
+  const londonMinute = getLondonMinute();
+  if (londonHour !== 8 || londonMinute > 5) return; // 08:00–08:05 only
+
+  if (!activeRunEffect) {
+    console.warn("Friday morning lock skipped: effect runtime not wired");
+    return;
+  }
+
+  const db = await getDb();
+  const today = getLondonDate();
+  const fridays = query<{ id: string; state_kind: string }>(db,
+    `SELECT id, json_extract(state, '$.kind') as state_kind FROM fridays
+     WHERE date = ?`, [today]);
+
+  for (const fri of fridays) {
+    if (fri.state_kind !== "open") continue;
+    try {
+      const { advanceFriday } = await import("./programs/friday-lifecycle.js");
+      await activeRunEffect(advanceFriday(fri.id));
+      console.log("Friday morning auto-lock advanced friday", { fridayId: fri.id });
+    } catch (e) {
+      console.error("Friday morning auto-lock failed:", e);
+    }
+  }
+}
+
 /** Friday morning reminder (09:00 London). */
 async function checkMorningReminder() {
   const londonHour = getLondonHour();
@@ -452,6 +505,9 @@ async function tick() {
     try { await checkWednesdayReminder(); } catch (e) { console.error("Wednesday reminder failed:", e); }
   }
   if (dow === 5) {
+    // Auto-lock the day's Friday at 08:00 so the 09:00 morning reminder has
+    // an accurate cube list to send out.
+    try { await checkFridayMorningLock(); } catch (e) { console.error("Friday morning lock failed:", e); }
     try { await checkMorningReminder(); } catch (e) { console.error("Morning reminder failed:", e); }
     try { await checkAfternoonReminder(); } catch (e) { console.error("Afternoon reminder failed:", e); }
   }
@@ -477,7 +533,8 @@ async function recoverGraceTimers() {
   }
 }
 
-export async function startScheduler(_runEffect?: RunEffect) {
+export async function startScheduler(runEffect?: RunEffect) {
+  if (runEffect) activeRunEffect = runEffect;
   await recoverGraceTimers();
 
   // Run immediately, then every 60s

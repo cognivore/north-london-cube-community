@@ -15,7 +15,9 @@ export type EmailKind =
   | "afternoon"
   | "uncancel"
   | "covered_coordinator"
-  | "backup_cube_host";
+  | "backup_cube_host"
+  | "selected_host"
+  | "not_selected_host";
 
 export type EmailContext = {
   readonly displayName: string;
@@ -24,8 +26,8 @@ export type EmailContext = {
   readonly appUrl: string;
   readonly rsvpTime?: string;     // for "lock" — friendly RSVP timestamp
   readonly coveredCount?: number; // for "covered_coordinator"
-  readonly ownCubeName?: string;  // for "backup_cube_host" — the host's own cube
-  readonly winningCubeName?: string; // for "backup_cube_host" — the cube chosen as primary
+  readonly ownCubeName?: string;  // host's own cube name (selected/not_selected/backup)
+  readonly winningCubeName?: string; // legacy alias of cubeNames for backup_cube_host
 };
 
 export type RenderedEmail = {
@@ -91,6 +93,18 @@ export function renderEmail(kind: EmailKind, ctx: EmailContext): RenderedEmail {
         subject: `Bring "${ctx.ownCubeName ?? "your cube"}" as backup for ${ctx.date}`,
         body: `Hi ${ctx.displayName},\n\nThanks for enrolling ${ctx.ownCubeName ?? "your cube"} for Friday ${ctx.date}.\n\nThe primary cube this week is "${ctx.winningCubeName ?? "TBD"}" — least recently played, so it gets the first pod.\n\nIf we get enough players for a second pod, we'd love to fire ${ctx.ownCubeName ?? "your cube"} too. Please bring it along just in case — no commitment to fire, just having it ready makes the call easy on the night.\n\nDoors: 18:30 | P1P1: 18:45\n\n${ctx.appUrl}\n\n— Cubehall`,
       };
+
+    case "selected_host":
+      return {
+        subject: `Bring "${ctx.ownCubeName ?? "your cube"}" tonight — you're firing ${ctx.date}`,
+        body: `Hi ${ctx.displayName},\n\n"${ctx.ownCubeName ?? "your cube"}" is one of tonight's cubes for Friday ${ctx.date} at Owl & Hitchhiker — selected as least recently played.\n\nPlease bring:\n  - the cube itself\n  - the token box (and any dice/counters that go with the cube)\n  - a stack of spare sleeves in case anyone has a breakage mid-draft\n\nFull line-up tonight: ${ctx.cubeNames}\n\nDoors: 18:30 | P1P1: 18:45\n\n${ctx.appUrl}\n\n— Cubehall`,
+      };
+
+    case "not_selected_host":
+      return {
+        subject: `Friday ${ctx.date} — "${ctx.ownCubeName ?? "your cube"}" stays at home`,
+        body: `Hi ${ctx.displayName},\n\nThanks for enrolling "${ctx.ownCubeName ?? "your cube"}" for Friday ${ctx.date}. You don't have to bring it tonight — we're playing ${ctx.cubeNames}, which sorted ahead on the least-recently-played rotation.\n\nIf you'd like to bring it along just in case (cancellations happen, someone might want a side draft), that's always welcome — but no obligation.\n\nDoors: 18:30 | P1P1: 18:45\n\n${ctx.appUrl}\n\n— Cubehall`,
+      };
   }
 }
 
@@ -104,6 +118,8 @@ export const ALL_EMAIL_KINDS: ReadonlyArray<EmailKind> = [
   "uncancel",
   "covered_coordinator",
   "backup_cube_host",
+  "selected_host",
+  "not_selected_host",
 ];
 
 /**
@@ -120,6 +136,8 @@ export function describeEmail(kind: EmailKind): string {
     case "afternoon":         return "Friday 16:30 London — \"get out of the office\" nudge to locked players.";
     case "uncancel":          return "When admin uncancels a Friday — sent to every player with a live RSVP.";
     case "covered_coordinator": return "When a player marks their RSVP as covered — sent to all coordinators.";
-    case "backup_cube_host":  return "When enrollments close — sent to each host whose cube wasn't picked, asking them to bring it as backup.";
+    case "backup_cube_host":  return "Legacy: previously sent to runners-up when enrollments closed. Replaced by selected/not-selected host emails.";
+    case "selected_host":     return "Friday morning auto-lock — sent to each host whose cube was chosen to run tonight: bring cube, tokens, spare sleeves.";
+    case "not_selected_host": return "Friday morning auto-lock — sent to each host whose cube wasn't chosen: cube not needed, but feel free to bring.";
   }
 }

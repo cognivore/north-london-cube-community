@@ -58,4 +58,6 @@ export { TIEBREAKERS } from "./engine/pairings-types.js";
 export { generatePairings } from "./engine/pairings.js";
 export { packPods } from "./engine/pod-packer.js";
 export type { PackPodsInput, PackPodsError } from "./engine/pod-packer.js";
+export { selectCubesByRecency, decidePodCount } from "./engine/cube-selection.js";
+export type { CubeSelectionResult } from "./engine/cube-selection.js";
 export { computeStandings, computeTeamScore } from "./engine/scoring.js";
