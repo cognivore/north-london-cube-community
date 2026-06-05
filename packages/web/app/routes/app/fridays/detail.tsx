@@ -90,6 +90,9 @@ export default function FridayDetail() {
   const myCubes = allCubes.filter(
     (c: any) => c.ownerId === currentUser?.id && !enrolledCubeIds.has(c.id) && !c.retired,
   );
+  // Cubes actually bound to a pod for this Friday — i.e. the ones that got
+  // picked by the morning auto-lock (or by a coordinator's manual lock).
+  const selectedCubeIds = new Set<string>(pods.map((p: any) => p.cubeId));
 
   const myRsvp = rsvps.find((r: any) => r.userId === currentUser?.id);
   const amIn = myRsvp && ["pending", "confirmed", "locked", "seated"].includes(myRsvp.state);
@@ -226,10 +229,32 @@ export default function FridayDetail() {
             {activeEnrollments.map((e: any) => {
               const cube = allCubes.find((c: any) => c.id === e.cubeId);
               const isMyEnrollment = e.hostId === currentUser?.id;
+              const isSelected = selectedCubeIds.has(e.cubeId);
+              const hasAnyPods = pods.length > 0;
               return (
-                <div key={e.id} className="flex items-center justify-between gap-3 rounded-sm bg-paper-sunken px-3 py-2">
+                <div
+                  key={e.id}
+                  className={
+                    `flex items-center justify-between gap-3 rounded-sm px-3 py-2 ` +
+                    (isSelected
+                      ? "bg-amber-soft border border-amber"
+                      : "bg-paper-sunken")
+                  }
+                >
                   <div className="min-w-0">
-                    <p className="font-medium text-ink">{cube?.name ?? "Unknown cube"}</p>
+                    <p className="font-medium text-ink">
+                      {cube?.name ?? "Unknown cube"}
+                      {isSelected && (
+                        <span className="ml-2 inline-block rounded-full bg-amber px-2 py-0.5 text-xs font-semibold text-paper align-middle">
+                          firing tonight
+                        </span>
+                      )}
+                      {hasAnyPods && !isSelected && (
+                        <span className="ml-2 inline-block rounded-full bg-paper-alt px-2 py-0.5 text-xs font-medium text-ink-faint align-middle">
+                          not selected
+                        </span>
+                      )}
+                    </p>
                     <p className="text-xs text-ink-faint">
                       {cube?.supportedFormats?.join(", ")} | {cube?.cardCount} cards
                     </p>
@@ -291,20 +316,28 @@ export default function FridayDetail() {
       {pods.length > 0 && (
         <section className="space-y-3">
           <h2 className="text-lg font-semibold text-ink">Pods</h2>
-          {pods.map((p: any) => (
-            <Link
-              key={p.id}
-              to={`/app/pods/${p.id}`}
-              className="block rounded-sm border border-rule bg-paper-alt p-4 hover:border-amber"
-            >
-              <div className="flex justify-between">
-                <span className="font-medium text-ink">
-                  {p.format.replace(/_/g, " ")}
-                </span>
-                <StateChip state={p.state} />
-              </div>
-            </Link>
-          ))}
+          {pods.map((p: any) => {
+            const cube = allCubes.find((c: any) => c.id === p.cubeId);
+            return (
+              <Link
+                key={p.id}
+                to={`/app/pods/${p.id}`}
+                className="block rounded-sm border border-rule bg-paper-alt p-4 hover:border-amber"
+              >
+                <div className="flex justify-between">
+                  <div className="min-w-0">
+                    <div className="font-medium text-ink">
+                      {cube?.name ?? "Unknown cube"}
+                    </div>
+                    <div className="text-xs text-ink-faint">
+                      {p.format.replace(/_/g, " ")}
+                    </div>
+                  </div>
+                  <StateChip state={p.state} />
+                </div>
+              </Link>
+            );
+          })}
         </section>
       )}
     </div>
