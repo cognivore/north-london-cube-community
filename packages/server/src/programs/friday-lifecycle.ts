@@ -224,7 +224,14 @@ export const advanceFriday = (fridayId: string) =>
         });
         yield* eventBus.publish({ kind: "friday.locked", fridayId: fid });
 
-        yield* sendCubeHostEmails(friday.date, selected, notSelected, cubes, userRepo);
+        yield* sendCubeHostEmails(
+          friday.date,
+          selected,
+          notSelected,
+          cubes,
+          { name: venue.name as string, address: venue.address, mapUrl: venue.mapUrl },
+          userRepo,
+        );
         return updated;
       }
 
@@ -481,6 +488,7 @@ function sendCubeHostEmails(
   selected: ReadonlyArray<Enrollment>,
   notSelected: ReadonlyArray<Enrollment>,
   cubes: ReadonlyArray<Cube>,
+  venue: { readonly name: string; readonly address: string; readonly mapUrl: string },
   userRepo: ReturnType<typeof UserRepo extends { Service: infer S } ? () => S : never>,
 ) {
   return Effect.gen(function* () {
@@ -518,6 +526,9 @@ function sendCubeHostEmails(
         cubeNames: selectedCubeNames,
         appUrl: scheduler.appUrl(),
         ownCubeName: ownCube?.name ?? "your cube",
+        venueName: venue.name,
+        venueAddress: venue.address,
+        venueMapUrl: venue.mapUrl,
       });
       yield* Effect.tryPromise({
         try: () => scheduler.sendEmail(host.email, rendered.subject, rendered.body),
@@ -538,6 +549,9 @@ function sendCubeHostEmails(
         cubeNames: selectedCubeNames,
         appUrl: scheduler.appUrl(),
         ownCubeName: ownCube?.name ?? "your cube",
+        venueName: venue.name,
+        venueAddress: venue.address,
+        venueMapUrl: venue.mapUrl,
       });
       yield* Effect.tryPromise({
         try: () => scheduler.sendEmail(host.email, rendered.subject, rendered.body),

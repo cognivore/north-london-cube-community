@@ -2,12 +2,33 @@
  * SendGrid email sender for magic links.
  */
 
+import { getDb, query } from "../db/sqlite.js";
+
 const SENDGRID_API_KEY = process.env.SENDGRID_API_KEY ?? "";
 const FROM_EMAIL = process.env.FROM_EMAIL ?? "noreply@cube.london";
 const FROM_NAME = process.env.FROM_NAME ?? "North London Cube Community";
 const APP_URL = process.env.APP_URL ?? "https://north.cube.london";
 const TEST_MODE = process.env.TEST_MODE === "true";
 const TEST_REDIRECT_EMAIL = "jm@memorici.de";
+
+/**
+ * Look up the active venue so the magic-link footer reflects the current
+ * pub instead of a hardcoded one. Falls back to a generic line if no active
+ * venue exists (rare — would mean an empty DB).
+ */
+async function activeVenue(): Promise<{ name: string; address: string; mapUrl: string }> {
+  try {
+    const db = await getDb();
+    const rows = query<{ name: string; address: string; map_url: string }>(db,
+      "SELECT name, address, map_url FROM venues WHERE active = 1 ORDER BY name LIMIT 1");
+    if (rows[0]) {
+      return { name: rows[0].name, address: rows[0].address ?? "", mapUrl: rows[0].map_url ?? "" };
+    }
+  } catch (e) {
+    console.warn("activeVenue() lookup failed; using generic footer", e);
+  }
+  return { name: "our venue", address: "North London", mapUrl: "" };
+}
 
 export async function sendMagicLinkEmail(
   to: string,
@@ -18,6 +39,11 @@ export async function sendMagicLinkEmail(
   const magicLink = `${APP_URL}/auth/verify?userId=${userId}&token=${token}`;
   const cocUrl = `${APP_URL}/code-of-conduct`;
   const actualTo = TEST_MODE ? TEST_REDIRECT_EMAIL : to;
+  const venue = await activeVenue();
+  const venueLink = venue.mapUrl
+    ? `<a href="${venue.mapUrl}" style="color: #f59e0b; text-decoration: underline;">${venue.name}</a>`
+    : venue.name;
+  const venueAddrSuffix = venue.address ? `, ${venue.address}` : "";
 
   const cocPlain = isRegistration
     ? `\n\nBy joining the community you agree to follow our Code of Conduct:\n${cocUrl}\n`
@@ -56,7 +82,7 @@ export async function sendMagicLinkEmail(
 <html>
 <body style="font-family: system-ui, sans-serif; max-width: 480px; margin: 0 auto; padding: 40px 20px; color: #e5e5e5; background: #0a0a0a;">
   <h1 style="color: #f59e0b; font-size: 24px; margin-bottom: 8px;">North London Cube Community</h1>
-  <p style="color: #a3a3a3; margin-bottom: 32px;">Friday night MTG cube drafts at Owl &amp; Hitchhiker</p>
+  <p style="color: #a3a3a3; margin-bottom: 32px;">Friday night MTG cube drafts at ${venue.name}</p>
 
   <p style="margin-bottom: 24px;">Click below to ${ctaPlain}:</p>
 
@@ -69,7 +95,7 @@ export async function sendMagicLinkEmail(
   </p>
 ${cocHtml}
   <p style="color: #525252; font-size: 12px; margin-top: 40px; border-top: 1px solid #262626; padding-top: 16px;">
-    <a href="https://maps.app.goo.gl/ae9BhBH59TWZ5uu99" style="color: #f59e0b; text-decoration: underline;">Owl &amp; Hitchhiker</a>, 471 Holloway Rd, Archway N7 &middot; Doors 18:30 &middot; P1P1 18:45
+    ${venueLink}${venueAddrSuffix} &middot; Doors 18:30 &middot; P1P1 18:45
   </p>
 </body>
 </html>`,

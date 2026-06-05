@@ -126,6 +126,34 @@ export async function sendEmail(to: string, subject: string, body: string) {
   });
 }
 
+/**
+ * Look up the venue assigned to a Friday so email templates can render the
+ * correct address and map link. Falls back to a placeholder if the join
+ * fails — that case is logged loudly because every Friday should have a
+ * venue and a placeholder in a real email is the bug we're trying to avoid.
+ */
+export type VenueCtx = {
+  readonly venueName: string;
+  readonly venueAddress: string;
+  readonly venueMapUrl: string;
+};
+
+export async function loadVenueForFriday(fridayId: string): Promise<VenueCtx> {
+  const db = await getDb();
+  const rows = query<{ name: string; address: string; map_url: string }>(db,
+    `SELECT v.name, v.address, v.map_url FROM venues v
+     JOIN fridays f ON f.venue_id = v.id WHERE f.id = ?`, [fridayId]);
+  if (rows.length === 0) {
+    console.warn("loadVenueForFriday: no venue found", { fridayId });
+    return { venueName: "the venue", venueAddress: "", venueMapUrl: "" };
+  }
+  return {
+    venueName: rows[0]!.name,
+    venueAddress: rows[0]!.address ?? "",
+    venueMapUrl: rows[0]!.map_url ?? "",
+  };
+}
+
 /** Deduplicate: returns true if this key was already sent. */
 async function alreadySent(sentKey: string, fridayId: string, emailType: string): Promise<boolean> {
   const db = await getDb();
@@ -155,12 +183,14 @@ async function sendLockEmail(userId: string, fridayId: string) {
     ? new Date(rsvpRow[0].created_at).toLocaleString("en-GB", { timeZone: "Europe/London", dateStyle: "medium", timeStyle: "short" })
     : "earlier";
 
+  const venue = await loadVenueForFriday(fridayId);
   const e = renderEmail("lock", {
     displayName: user[0].display_name,
     date: fri[0].date,
     cubeNames: "",
     appUrl: appUrl(),
     rsvpTime,
+    ...venue,
   });
   await sendEmail(user[0].email, e.subject, e.body);
 }
@@ -203,12 +233,14 @@ async function checkCubeAnnouncements() {
        WHERE r.friday_id = ? AND r.state IN ('locked', 'seated')`,
       [fri.id]);
 
+    const venue = await loadVenueForFriday(fri.id);
     for (const a of attendees) {
       const e = renderEmail("cube_announcement", {
         displayName: a.display_name,
         date: fri.date,
         cubeNames: cubeList,
         appUrl: appUrl(),
+        ...venue,
       });
       await sendEmail(a.email, e.subject, e.body);
     }
@@ -252,12 +284,14 @@ export async function checkWednesdayReminder() {
        WHERE r.friday_id = ? AND r.state IN ('locked', 'seated')`,
       [fri.id]);
 
+    const venue = await loadVenueForFriday(fri.id);
     for (const a of locked) {
       const e = renderEmail("wednesday", {
         displayName: a.display_name,
         date: fri.date,
         cubeNames,
         appUrl: appUrl(),
+        ...venue,
       });
       await sendEmail(a.email, e.subject, e.body);
     }
@@ -335,12 +369,14 @@ async function checkMorningReminder() {
          WHERE r.friday_id = ? AND r.state IN ('locked', 'seated')`,
         [fri.id]);
 
+      const venue = await loadVenueForFriday(fri.id);
       for (const a of locked) {
         const e = renderEmail("morning_locked", {
           displayName: a.display_name,
           date: fri.date,
           cubeNames,
           appUrl: appUrl(),
+          ...venue,
         });
         await sendEmail(a.email, e.subject, e.body);
       }
@@ -355,12 +391,14 @@ async function checkMorningReminder() {
          WHERE r.friday_id = ? AND r.state = 'pending'`,
         [fri.id]);
 
+      const venue = await loadVenueForFriday(fri.id);
       for (const a of pending) {
         const e = renderEmail("morning_pending", {
           displayName: a.display_name,
           date: fri.date,
           cubeNames: "",
           appUrl: appUrl(),
+          ...venue,
         });
         await sendEmail(a.email, e.subject, e.body);
       }
@@ -390,12 +428,14 @@ async function checkAfternoonReminder() {
        WHERE r.friday_id = ? AND r.state IN ('locked', 'seated')`,
       [fri.id]);
 
+    const venue = await loadVenueForFriday(fri.id);
     for (const a of locked) {
       const e = renderEmail("afternoon", {
         displayName: a.display_name,
         date: fri.date,
         cubeNames: "",
         appUrl: appUrl(),
+        ...venue,
       });
       await sendEmail(a.email, e.subject, e.body);
     }

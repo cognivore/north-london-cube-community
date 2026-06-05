@@ -349,6 +349,14 @@ admin.post("/test-email", async (c) => {
   }
 
   const appUrlValue = process.env.APP_URL ?? "https://north.cube.london";
+  // Preview ctx uses the next active venue from the DB so the coordinator sees
+  // a realistic email — never a hardcoded venue name.
+  const db = await getDb();
+  const previewVenueRow = dbQuery<{ name: string; address: string; map_url: string }>(db,
+    "SELECT name, address, map_url FROM venues WHERE active = 1 ORDER BY name LIMIT 1");
+  const previewVenue = previewVenueRow[0]
+    ? { venueName: previewVenueRow[0].name, venueAddress: previewVenueRow[0].address, venueMapUrl: previewVenueRow[0].map_url }
+    : { venueName: "the venue", venueAddress: "", venueMapUrl: "" };
   const ctx = {
     displayName: body?.displayName?.trim() || "Friend",
     date: body?.date?.trim() || new Date().toISOString().slice(0, 10),
@@ -356,6 +364,9 @@ admin.post("/test-email", async (c) => {
     appUrl: appUrlValue,
     rsvpTime: "yesterday at 21:34",
     coveredCount: 2,
+    ownCubeName: "Powered Vintage",
+    winningCubeName: "Sealed pool",
+    ...previewVenue,
   };
 
   const rendered = renderEmail(kind, ctx);
@@ -458,6 +469,8 @@ admin.post("/fridays/:id/uncancel", async (c) => {
 
     const date = fri[0]!.date;
     const appUrl = process.env.APP_URL ?? "https://north.cube.london";
+    const { loadVenueForFriday } = await import("../../scheduler.js");
+    const venue = await loadVenueForFriday(fridayId);
     const sent: string[] = [];
     const failed: Array<{ email: string; error: string }> = [];
     for (const r of recipients) {
@@ -467,6 +480,7 @@ admin.post("/fridays/:id/uncancel", async (c) => {
           date,
           cubeNames: "",
           appUrl,
+          ...venue,
         });
         await sendEmail(r.email, e.subject, e.body);
         sent.push(r.email);

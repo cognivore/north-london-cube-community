@@ -24,6 +24,16 @@ export type EmailContext = {
   readonly date: string;          // e.g. "2026-05-15"
   readonly cubeNames: string;     // comma-separated cube names, e.g. "Powered Vintage, Sealed pool"
   readonly appUrl: string;
+  /**
+   * Venue context — the active venue for this Friday (or for the default
+   * pub when no Friday is in scope, e.g. the admin email preview). Always
+   * REQUIRED in production code paths so nobody ever sees a stale
+   * "Owl & Hitchhiker" line again. Templates that do not need the venue
+   * may ignore these fields, but they must be passed.
+   */
+  readonly venueName: string;
+  readonly venueAddress?: string;     // e.g. "46 Essex St., Temple, London WC2R 3JF"
+  readonly venueMapUrl?: string;      // Google Maps / Apple Maps link
   readonly rsvpTime?: string;     // for "lock" — friendly RSVP timestamp
   readonly coveredCount?: number; // for "covered_coordinator"
   readonly ownCubeName?: string;  // host's own cube name (selected/not_selected/backup)
@@ -35,48 +45,64 @@ export type RenderedEmail = {
   readonly body: string;
 };
 
+/**
+ * Render the venue footer the same way for every template. Two lines:
+ *   Venue: <name>, <address>
+ *   Map: <map url>
+ * Drops the address/map lines if they aren't set on the context.
+ */
+function venueFooter(ctx: EmailContext): string {
+  const lines: string[] = [];
+  const addr = ctx.venueAddress?.trim();
+  lines.push(`Venue: ${ctx.venueName}${addr ? `, ${addr}` : ""}`);
+  if (ctx.venueMapUrl) lines.push(`Map: ${ctx.venueMapUrl}`);
+  return lines.join("\n");
+}
+
 export function renderEmail(kind: EmailKind, ctx: EmailContext): RenderedEmail {
+  const venue = ctx.venueName;
+  const footer = venueFooter(ctx);
   switch (kind) {
     case "lock":
       return {
         subject: `You're locked in for ${ctx.date}`,
-        body: `Hi ${ctx.displayName},\n\nYou're locked in for Friday ${ctx.date} at Owl & Hitchhiker.\n\nRSVP'd at: ${ctx.rsvpTime ?? "earlier"}\nDoors: 18:30\nP1P1: 18:45\n\nThis is a commitment to attend. See you there!\n\n${ctx.appUrl}\n\n— Cubehall`,
+        body: `Hi ${ctx.displayName},\n\nYou're locked in for Friday ${ctx.date} at ${venue}.\n\nRSVP'd at: ${ctx.rsvpTime ?? "earlier"}\nDoors: 18:30\nP1P1: 18:45\n\n${footer}\n\nThis is a commitment to attend. See you there!\n\n${ctx.appUrl}\n\n— Cubehall`,
       };
 
     case "cube_announcement":
       return {
         subject: `Cubes for ${ctx.date}`,
-        body: `Hi ${ctx.displayName},\n\nThe cubes for Friday ${ctx.date} have been decided:\n\n${ctx.cubeNames}\n\nDoors: 18:30 | P1P1: 18:45\n\n${ctx.appUrl}\n\n— Cubehall`,
+        body: `Hi ${ctx.displayName},\n\nThe cubes for Friday ${ctx.date} have been decided:\n\n${ctx.cubeNames}\n\nDoors: 18:30 | P1P1: 18:45\n\n${footer}\n\n${ctx.appUrl}\n\n— Cubehall`,
       };
 
     case "wednesday":
       return {
         subject: `Friday ${ctx.date} — midweek reminder`,
-        body: `Hi ${ctx.displayName},\n\nQuick midweek heads-up: you're locked in for Friday ${ctx.date} at Owl & Hitchhiker.\n\nCubes: ${ctx.cubeNames}\nDoors: 18:30 | P1P1: 18:45\n\nIf something's changed and you can't make it, please withdraw via the app so someone else can take your spot:\n${ctx.appUrl}\n\n— Cubehall`,
+        body: `Hi ${ctx.displayName},\n\nQuick midweek heads-up: you're locked in for Friday ${ctx.date} at ${venue}.\n\nCubes: ${ctx.cubeNames}\nDoors: 18:30 | P1P1: 18:45\n\n${footer}\n\nIf something's changed and you can't make it, please withdraw via the app so someone else can take your spot:\n${ctx.appUrl}\n\n— Cubehall`,
       };
 
     case "morning_locked":
       return {
         subject: `Tonight: ${ctx.cubeNames}`,
-        body: `Hi ${ctx.displayName},\n\nReminder: you're playing tonight!\n\nCubes: ${ctx.cubeNames}\nDoors: 18:30 | P1P1: 18:45\nOWL & Hitchhiker\n\nSee you there!\n\n${ctx.appUrl}\n\n— Cubehall`,
+        body: `Hi ${ctx.displayName},\n\nReminder: you're playing tonight!\n\nCubes: ${ctx.cubeNames}\nDoors: 18:30 | P1P1: 18:45\n\n${footer}\n\nSee you there!\n\n${ctx.appUrl}\n\n— Cubehall`,
       };
 
     case "morning_pending":
       return {
         subject: `Cube tonight — come along!`,
-        body: `Hi ${ctx.displayName},\n\nYou're in for tonight's cube draft at Owl & Hitchhiker — doors 18:30, P1P1 18:45.\n\nYou're currently unpaired. If you can rope a friend into joining, even better (pairs lock in faster) — share this link with them: ${ctx.appUrl}/register\n\nEither way, please come along. We'll sort pods on the night.\n\n${ctx.appUrl}\n\n— Cubehall`,
+        body: `Hi ${ctx.displayName},\n\nYou're in for tonight's cube draft at ${venue} — doors 18:30, P1P1 18:45.\n\n${footer}\n\nYou're currently unpaired. If you can rope a friend into joining, even better (pairs lock in faster) — share this link with them: ${ctx.appUrl}/register\n\nEither way, please come along. We'll sort pods on the night.\n\n${ctx.appUrl}\n\n— Cubehall`,
       };
 
     case "afternoon":
       return {
         subject: `Get out of the office!`,
-        body: `Hi ${ctx.displayName},\n\nLeave by 17:00 to catch the game tonight!\n\nP1P1 is at 18:45 — doors open 18:30 at Owl & Hitchhiker.\n\nSee you soon!\n\n${ctx.appUrl}\n\n— Cubehall`,
+        body: `Hi ${ctx.displayName},\n\nLeave by 17:00 to catch the game tonight!\n\nP1P1 is at 18:45 — doors open 18:30 at ${venue}.\n\n${footer}\n\nSee you soon!\n\n${ctx.appUrl}\n\n— Cubehall`,
       };
 
     case "uncancel":
       return {
         subject: `Friday ${ctx.date} is back on`,
-        body: `Hi ${ctx.displayName},\n\nGood news — Friday ${ctx.date} at Owl & Hitchhiker has been un-cancelled and is going ahead.\n\nYour RSVP is still in place. Doors 18:30, P1P1 18:45.\n\nIf you can no longer make it, please withdraw via the app so someone else can take your spot:\n${ctx.appUrl}\n\n— Cubehall`,
+        body: `Hi ${ctx.displayName},\n\nGood news — Friday ${ctx.date} at ${venue} has been un-cancelled and is going ahead.\n\nYour RSVP is still in place. Doors 18:30, P1P1 18:45.\n\n${footer}\n\nIf you can no longer make it, please withdraw via the app so someone else can take your spot:\n${ctx.appUrl}\n\n— Cubehall`,
       };
 
     case "covered_coordinator": {
@@ -91,19 +117,19 @@ export function renderEmail(kind: EmailKind, ctx: EmailContext): RenderedEmail {
     case "backup_cube_host":
       return {
         subject: `Bring "${ctx.ownCubeName ?? "your cube"}" as backup for ${ctx.date}`,
-        body: `Hi ${ctx.displayName},\n\nThanks for enrolling ${ctx.ownCubeName ?? "your cube"} for Friday ${ctx.date}.\n\nThe primary cube this week is "${ctx.winningCubeName ?? "TBD"}" — least recently played, so it gets the first pod.\n\nIf we get enough players for a second pod, we'd love to fire ${ctx.ownCubeName ?? "your cube"} too. Please bring it along just in case — no commitment to fire, just having it ready makes the call easy on the night.\n\nDoors: 18:30 | P1P1: 18:45\n\n${ctx.appUrl}\n\n— Cubehall`,
+        body: `Hi ${ctx.displayName},\n\nThanks for enrolling ${ctx.ownCubeName ?? "your cube"} for Friday ${ctx.date} at ${venue}.\n\nThe primary cube this week is "${ctx.winningCubeName ?? "TBD"}" — least recently played, so it gets the first pod.\n\nIf we get enough players for a second pod, we'd love to fire ${ctx.ownCubeName ?? "your cube"} too. Please bring it along just in case — no commitment to fire, just having it ready makes the call easy on the night.\n\nDoors: 18:30 | P1P1: 18:45\n\n${footer}\n\n${ctx.appUrl}\n\n— Cubehall`,
       };
 
     case "selected_host":
       return {
         subject: `Bring "${ctx.ownCubeName ?? "your cube"}" tonight — you're firing ${ctx.date}`,
-        body: `Hi ${ctx.displayName},\n\n"${ctx.ownCubeName ?? "your cube"}" is one of tonight's cubes for Friday ${ctx.date} at Owl & Hitchhiker — selected as least recently played.\n\nPlease bring:\n  - the cube itself\n  - the token box (and any dice/counters that go with the cube)\n  - a stack of spare sleeves in case anyone has a breakage mid-draft\n\nFull line-up tonight: ${ctx.cubeNames}\n\nDoors: 18:30 | P1P1: 18:45\n\n${ctx.appUrl}\n\n— Cubehall`,
+        body: `Hi ${ctx.displayName},\n\n"${ctx.ownCubeName ?? "your cube"}" is one of tonight's cubes for Friday ${ctx.date} at ${venue} — selected as least recently played.\n\nPlease bring:\n  - the cube itself\n  - the token box (and any dice/counters that go with the cube)\n  - a stack of spare sleeves in case anyone has a breakage mid-draft\n\nFull line-up tonight: ${ctx.cubeNames}\n\nDoors: 18:30 | P1P1: 18:45\n\n${footer}\n\n${ctx.appUrl}\n\n— Cubehall`,
       };
 
     case "not_selected_host":
       return {
         subject: `Friday ${ctx.date} — "${ctx.ownCubeName ?? "your cube"}" stays at home`,
-        body: `Hi ${ctx.displayName},\n\nThanks for enrolling "${ctx.ownCubeName ?? "your cube"}" for Friday ${ctx.date}. You don't have to bring it tonight — we're playing ${ctx.cubeNames}, which sorted ahead on the least-recently-played rotation.\n\nIf you'd like to bring it along just in case (cancellations happen, someone might want a side draft), that's always welcome — but no obligation.\n\nDoors: 18:30 | P1P1: 18:45\n\n${ctx.appUrl}\n\n— Cubehall`,
+        body: `Hi ${ctx.displayName},\n\nThanks for enrolling "${ctx.ownCubeName ?? "your cube"}" for Friday ${ctx.date} at ${venue}. You don't have to bring it tonight — we're playing ${ctx.cubeNames}, which sorted ahead on the least-recently-played rotation.\n\nIf you'd like to bring it along just in case (cancellations happen, someone might want a side draft), that's always welcome — but no obligation.\n\nDoors: 18:30 | P1P1: 18:45\n\n${footer}\n\n${ctx.appUrl}\n\n— Cubehall`,
       };
   }
 }
