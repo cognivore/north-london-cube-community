@@ -140,30 +140,61 @@ export const verify = (input: { userId: string; challenge: string }) =>
       return yield* Effect.fail<AuthError>({ kind: "user_not_found" });
     }
 
-    if (user.authState.kind !== "pending_verification") {
-      return yield* Effect.fail<AuthError>({ kind: "invalid_challenge" });
-    }
-
-    if (user.authState.challenge !== input.challenge) {
-      return yield* Effect.fail<AuthError>({ kind: "invalid_challenge" });
-    }
-
     const now = yield* clock.now();
-    if (now > user.authState.expires) {
+
+    // Path A — initial registration: the challenge lives in auth_state, and a
+    // successful verify transitions the account pending_verification → verified.
+    if (user.authState.kind === "pending_verification") {
+      if (user.authState.challenge !== input.challenge) {
+        return yield* Effect.fail<AuthError>({ kind: "invalid_challenge" });
+      }
+      if (now > user.authState.expires) {
+        return yield* Effect.fail<AuthError>({ kind: "challenge_expired" });
+      }
+      const verified: User = {
+        ...user,
+        authState: { kind: "verified" } as AuthState,
+      };
+      yield* userRepo.update(verified);
+      const session = yield* createSession(user.id, now, rng, sessionRepo);
+      return { user: verified, session };
+    }
+
+    // Suspended/merged accounts cannot be logged into via a magic link.
+    if (user.authState.kind === "suspended" || user.authState.kind === "merged") {
+      return yield* Effect.fail<AuthError>({ kind: "invalid_challenge" });
+    }
+
+    // Path B — returning login: the challenge lives in the login_challenges
+    // table (NOT auth_state), so the account stays 'verified' and the
+    // pending-user GC never deletes it mid-login. Single-use: consume on check.
+    const outcome = yield* Effect.tryPromise({
+      try: async () => {
+        const { getDb, query: dbQuery, run: dbRun, persist: dbPersist } = await import("../db/sqlite.js");
+        const db = await getDb();
+        const rows = dbQuery<{ token: string; expires: string }>(
+          db,
+          "SELECT token, expires FROM login_challenges WHERE token = ? AND user_id = ?",
+          [input.challenge, input.userId],
+        );
+        const row = rows[0];
+        if (!row) return "invalid" as const;
+        dbRun(db, "DELETE FROM login_challenges WHERE token = ?", [row.token]);
+        dbPersist();
+        return (now > row.expires ? "expired" : "ok") as "expired" | "ok";
+      },
+      catch: () => "invalid" as const,
+    });
+
+    if (outcome === "invalid") {
+      return yield* Effect.fail<AuthError>({ kind: "invalid_challenge" });
+    }
+    if (outcome === "expired") {
       return yield* Effect.fail<AuthError>({ kind: "challenge_expired" });
     }
 
-    // Transition to verified
-    const verified: User = {
-      ...user,
-      authState: { kind: "verified" } as AuthState,
-    };
-    yield* userRepo.update(verified);
-
-    // Create session
     const session = yield* createSession(user.id, now, rng, sessionRepo);
-
-    return { user: verified, session };
+    return { user, session };
   });
 
 // ---------------------------------------------------------------------------
@@ -199,16 +230,29 @@ export const login = (input: { email: string }) =>
       new Date(Date.parse(now) + 30 * 60 * 1000).toISOString(),
     );
 
-    // Update user with new challenge
-    const updated: User = {
-      ...user,
-      authState: {
-        kind: "pending_verification" as const,
-        challenge: challengeToken,
-        expires: expiresAt,
+    // Store the login challenge in a SEPARATE table — do NOT touch auth_state.
+    // A returning user's account must stay 'verified' while a login is pending;
+    // otherwise scheduler.gcPendingUsers treats it as a stale pending
+    // registration and deletes it mid-login. (This conflation is exactly the
+    // bug that deleted the coordinator account on 2026-06-11.)
+    yield* Effect.tryPromise({
+      try: async () => {
+        const { getDb, run: dbRun, persist: dbPersist } = await import("../db/sqlite.js");
+        const db = await getDb();
+        // One pending login challenge per user: replace any prior one.
+        dbRun(db, "DELETE FROM login_challenges WHERE user_id = ?", [user.id as string]);
+        dbRun(
+          db,
+          "INSERT INTO login_challenges (token, user_id, expires, created_at) VALUES (?, ?, ?, ?)",
+          [challengeToken as string, user.id as string, expiresAt as string, now as string],
+        );
+        dbPersist();
       },
-    };
-    yield* userRepo.update(updated);
+      catch: (e) => {
+        console.error("Failed to store login challenge:", e);
+        return undefined as never;
+      },
+    });
 
     // Send magic link email
     yield* Effect.tryPromise({

@@ -151,6 +151,19 @@ const SCHEMA = `
     used_count INTEGER NOT NULL DEFAULT 0
   );
 
+  -- login_challenges: ephemeral magic-link challenges for RETURNING users.
+  -- Kept OUT of users.auth_state on purpose: a returning user's account must
+  -- stay 'verified' while a login is pending, otherwise the pending-user GC
+  -- (scheduler.gcPendingUsers) deletes verified accounts mid-login. New
+  -- registrations still use auth_state='pending_verification'; logins use this.
+  CREATE TABLE IF NOT EXISTS login_challenges (
+    token TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    expires TEXT NOT NULL,
+    created_at TEXT NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS idx_login_challenges_user ON login_challenges(user_id);
+
   CREATE TABLE IF NOT EXISTS audit_events (
     id TEXT PRIMARY KEY,
     at TEXT NOT NULL,
