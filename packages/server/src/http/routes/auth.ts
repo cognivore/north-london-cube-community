@@ -3,10 +3,33 @@
  */
 
 import { Hono } from "hono";
+import type { Context } from "hono";
 import { setCookie, deleteCookie } from "hono/cookie";
 import type { AppEnv } from "../middleware.js";
 import { apiError } from "../middleware.js";
 import { register, verify, login, logout } from "../../programs/auth.js";
+import {
+  clientIp, isSuspectIp, issuePow, verifyPow, ipBackoff,
+} from "../auth-guard.js";
+
+// Adapt Hono's header accessor to the guard's { get } shape.
+const hdr = (c: Context) => ({ get: (n: string) => c.req.header(n) });
+
+// Shared gate for the two abuse-prone POSTs (register, login): per-IP
+// exponential backoff + a required proof-of-work solution. Returns a Response
+// to short-circuit on rejection, or null to proceed.
+function authGate(c: Context, pow: { id?: string; nonce?: string } | undefined): Response | null {
+  const ip = clientIp(hdr(c));
+  const waitMs = ipBackoff(ip);
+  if (waitMs > 0) {
+    c.header("Retry-After", String(Math.ceil(waitMs / 1000)));
+    return apiError(c, 429, "RATE_LIMITED", "Too many attempts — please wait a moment and try again.");
+  }
+  if (!verifyPow(pow?.id, pow?.nonce)) {
+    return apiError(c, 400, "POW_REQUIRED", "Verification challenge missing or invalid — please retry.");
+  }
+  return null;
+}
 
 // Extract error kind from Effect's FiberFailure-wrapped errors
 function extractErrorKind(e: unknown): string | undefined {
@@ -29,9 +52,20 @@ function extractErrorKind(e: unknown): string | undefined {
 
 const auth = new Hono<AppEnv>();
 
+// GET /api/auth/challenge — issue a free proof-of-work CAPTCHA. The browser
+// must solve it before register/login. Difficulty is higher for VPN /
+// datacenter / Tor IPs, and `vpnHint` lets the UI suggest disabling the VPN.
+auth.get("/challenge", (c) => {
+  const suspect = isSuspectIp(clientIp(hdr(c)));
+  const ch = issuePow(suspect);
+  return c.json({ id: ch.id, salt: ch.salt, bits: ch.bits, expires: ch.expires, vpnHint: suspect });
+});
+
 // POST /api/auth/register
 auth.post("/register", async (c) => {
   const body = await c.req.json();
+  const gate = authGate(c, body.pow);
+  if (gate) return gate;
   const run = c.get("effectRuntime");
 
   try {
@@ -92,6 +126,8 @@ auth.post("/verify", async (c) => {
 // POST /api/auth/session (login)
 auth.post("/session", async (c) => {
   const body = await c.req.json();
+  const gate = authGate(c, body.pow);
+  if (gate) return gate;
   const run = c.get("effectRuntime");
 
   try {

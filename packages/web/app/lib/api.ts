@@ -49,7 +49,7 @@ export function cookieHeader(request: Request): Record<string, string> {
 }
 
 export const api = {
-  register: (data: { email: string; displayName: string }) =>
+  register: (data: { email: string; displayName: string; pow?: { id: string; nonce: string } }) =>
     apiFetch<{ userId: string; challengeToken?: string }>("/api/auth/register", {
       method: "POST",
       body: JSON.stringify(data),
@@ -61,7 +61,7 @@ export const api = {
       body: JSON.stringify(data),
     }),
 
-  login: (data: { email: string }) =>
+  login: (data: { email: string; pow?: { id: string; nonce: string } }) =>
     apiFetchRaw<{ user: any }>("/api/auth/session", {
       method: "POST",
       body: JSON.stringify(data),

@@ -3,6 +3,7 @@
  */
 
 import { getDb, query } from "../db/sqlite.js";
+import { allowEmailSend } from "../http/auth-guard.js";
 
 const SENDGRID_API_KEY = process.env.SENDGRID_API_KEY ?? "";
 const FROM_EMAIL = process.env.FROM_EMAIL ?? "noreply@cube.london";
@@ -36,6 +37,19 @@ export async function sendMagicLinkEmail(
   userId: string,
   isRegistration = false,
 ): Promise<void> {
+  // Email send limits (abuse protection): per-email cooldown + daily cap +
+  // a GLOBAL hourly budget. This is the hard ceiling that stops a registration
+  // flood from torching SendGrid reputation/quota (shared with the GEOSURGE
+  // sender). Denied sends are logged and silently dropped — the account /
+  // login-challenge still exists, the user can retry after the cooldown.
+  const decision = allowEmailSend(to);
+  if (!decision.allow) {
+    console.warn(
+      `magic-link send suppressed (${decision.reason}, retry in ${Math.ceil(decision.retryAfterMs / 1000)}s) for ${to}`,
+    );
+    return;
+  }
+
   const magicLink = `${APP_URL}/auth/verify?userId=${userId}&token=${token}`;
   const cocUrl = `${APP_URL}/code-of-conduct`;
   const actualTo = TEST_MODE ? TEST_REDIRECT_EMAIL : to;
