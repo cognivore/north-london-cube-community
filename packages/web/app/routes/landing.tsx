@@ -1,45 +1,73 @@
+import type { ReactNode } from "react";
 import type { MetaFunction } from "react-router";
 import { Link, redirect, useLoaderData } from "react-router";
 import { Icon } from "../components/Icon";
 import type { SilkIcon } from "../components/Icon";
 import { VenueCard } from "../components/venue-card";
+import type { VenueCardData } from "../components/venue-card";
 import { api, cookieHeader } from "../lib/api";
 
-const CANONICAL_VENUE_ID = "d0000000-0000-0000-0000-000000000001";
+// Two-venue rotation: odd Fridays at Arcadia Games (…0001), even Fridays at
+// BMC Holloway Road (…0002). Ids mirror packages/server/src/venue-rotation.ts.
+const ARCADIA_VENUE_ID = "d0000000-0000-0000-0000-000000000001";
+const BMC_VENUE_ID = "d0000000-0000-0000-0000-000000000002";
+
+// SSR fallbacks if the venues aren't in the DB yet (degrades gracefully).
+const ARCADIA_FALLBACK: VenueCardData = {
+  name: "Arcadia Games",
+  address: "46-48 Essex Street, Temple, London WC2R 3JF",
+  mapUrl:
+    "https://www.google.com/maps/search/?api=1&query=Arcadia%20Games%2046-48%20Essex%20Street%20London%20WC2R%203JF",
+};
+const BMC_FALLBACK: VenueCardData = {
+  name: "BMC Holloway Road",
+  address: "",
+  mapUrl: "",
+};
 
 export async function loader({ request }: { request: Request }) {
   const result = await api.me({ headers: cookieHeader(request) });
   if (result.ok) return redirect("/app");
   const venuesRes = await api.listVenues();
   const venues = venuesRes.ok ? venuesRes.data.venues : [];
-  const canonical = venues.find((v: any) => v.id === CANONICAL_VENUE_ID);
-  const active = venues.find((v: any) => v.active);
-  const venue = canonical ?? active ?? venues[0] ?? null;
-  return { venue };
+  const byId = (id: string) => venues.find((v: any) => v.id === id) ?? null;
+  return { arcadia: byId(ARCADIA_VENUE_ID), bmc: byId(BMC_VENUE_ID) };
 }
 
 export const meta: MetaFunction = () => [
   { title: "North London Cube Community" },
-  { name: "description", content: "Weekly MTG cube drafts every Friday at Owl & Hitchhiker, Archway N7. No committee, no gatekeeping — just show up and draft." },
+  { name: "description", content: "Weekly MTG cube drafts every Friday in North London — odd weeks at Arcadia Games (Temple), even weeks at BMC on Holloway Road. No committee, no gatekeeping — just show up and draft." },
   { property: "og:title", content: "North London Cube Community" },
-  { property: "og:description", content: "Weekly MTG cube drafts every Friday at Owl & Hitchhiker, Archway N7." },
+  { property: "og:description", content: "Weekly MTG cube drafts every Friday in North London — Arcadia Games (odd weeks) & BMC, Holloway Road (even weeks)." },
   { property: "og:image", content: "https://north.cube.london/og.png" },
   { property: "og:type", content: "website" },
   { property: "og:url", content: "https://north.cube.london" },
   { name: "twitter:card", content: "summary_large_image" },
   { name: "twitter:title", content: "North London Cube Community" },
-  { name: "twitter:description", content: "Weekly MTG cube drafts every Friday at Owl & Hitchhiker, Archway N7." },
+  { name: "twitter:description", content: "Weekly MTG cube drafts every Friday in North London — Arcadia Games (odd weeks) & BMC, Holloway Road (even weeks)." },
   { name: "twitter:image", content: "https://north.cube.london/og.png" },
   { name: "theme-color", content: "#f59e0b" },
 ];
 
+/** Render a venue's name as a map link when it has one, plain text otherwise. */
+function venueLink(v: VenueCardData): ReactNode {
+  if (v.mapUrl && v.mapUrl.length > 0) {
+    return (
+      <a href={v.mapUrl} className="text-dci-teal underline" target="_blank" rel="noopener noreferrer">
+        {v.name}
+      </a>
+    );
+  }
+  return <span>{v.name}</span>;
+}
+
 export default function Landing() {
-  const data = useLoaderData<typeof loader>() as { venue: any | null };
-  const venue = data?.venue;
-  const venueName = venue?.name ?? "Owl & Hitchhiker";
-  const venueAddress = venue?.address ?? "471 Holloway Rd, Archway N7 6LE";
-  const venueMapUrl = venue?.mapUrl || undefined;
-  const whereValue = venue ? `${venueName}, ${venueAddress}` : "Owl & Hitchhiker, 471 Holloway Rd, Archway N7";
+  const data = useLoaderData<typeof loader>() as { arcadia: any | null; bmc: any | null };
+  const toCard = (v: any | null, fallback: VenueCardData): VenueCardData =>
+    v ? { name: v.name, address: v.address ?? "", mapUrl: v.mapUrl ?? "" } : fallback;
+  const arcadia = toCard(data?.arcadia, ARCADIA_FALLBACK);
+  const bmc = toCard(data?.bmc, BMC_FALLBACK);
+
   return (
     <div className="min-h-dvh flex flex-col bg-paper text-ink">
       {/* Site identity bar */}
@@ -81,13 +109,7 @@ export default function Landing() {
         </div>
 
         <p className="mt-8 text-sm text-ink-faint">
-          18:45 every Friday at{" "}
-          {venueMapUrl ? (
-            <a href={venueMapUrl} className="text-dci-teal underline" rel="noopener noreferrer">{venueName}</a>
-          ) : (
-            <span>{venueName}</span>
-          )}
-          {venueAddress && <>, {venueAddress.split(",").slice(-2).join(",").trim()}</>}
+          P1P1 18:30 every Friday in North London
         </p>
       </header>
 
@@ -101,7 +123,8 @@ export default function Landing() {
               There is no committee, no membership fee, no gatekeeping.
               Anyone can bring a cube. Anyone can show up and play.
               The only thing that's fixed is the framework: every Friday,
-              same venue, same time. We follow a{" "}
+              same time, rotating between Arcadia Games and BMC on Holloway Road.
+              We follow a{" "}
               <a href="/code-of-conduct" className="text-dci-teal underline">Code of Conduct</a>{" "}
               based on the{" "}
               <a href="https://berlincodeofconduct.org/" className="text-dci-teal underline" rel="noopener noreferrer">Berlin Code of Conduct</a>.
@@ -111,10 +134,19 @@ export default function Landing() {
           <div>
             <h2 className="text-2xl font-semibold text-ink">The framework</h2>
             <div className="mt-3 border border-rule-heavy bg-paper-alt">
-              <FrameworkRow icon="house" label="Where" value={whereValue} href={venueMapUrl} />
+              <FrameworkRow
+                icon="house"
+                label="Where"
+                value={
+                  <span className="block space-y-0.5">
+                    <span className="block">{venueLink(arcadia)} <span className="text-ink-faint">— odd Fridays</span></span>
+                    <span className="block">{venueLink(bmc)} <span className="text-ink-faint">— even Fridays</span></span>
+                  </span>
+                }
+              />
               <FrameworkRow icon="calendar" label="When" value="Every Friday" />
-              <FrameworkRow icon="door_in" label="Doors" value="18:30" />
-              <FrameworkRow icon="time" label="P1P1" value="18:45" />
+              <FrameworkRow icon="door_in" label="Doors" value="18:00" />
+              <FrameworkRow icon="time" label="P1P1" value="18:30" />
               <FrameworkRow icon="ruby" label="Entry" value="£7 → venue credit (food & drinks)" last />
             </div>
             <p className="mt-3 text-sm text-ink-faint">
@@ -134,8 +166,18 @@ export default function Landing() {
 
           <div>
             <h2 className="text-2xl font-semibold text-ink">Find us</h2>
-            <div className="mt-3">
-              {venue && <VenueCard venue={venue} />}
+            <p className="mt-1 text-sm text-ink-faint">
+              We alternate weekly. Check the app for which venue this Friday lands at.
+            </p>
+            <div className="mt-3 space-y-4">
+              <div>
+                <p className="mb-1 text-xs uppercase tracking-wider text-ink-faint" style={{ fontVariant: "small-caps" }}>Odd Fridays</p>
+                <VenueCard venue={arcadia} />
+              </div>
+              <div>
+                <p className="mb-1 text-xs uppercase tracking-wider text-ink-faint" style={{ fontVariant: "small-caps" }}>Even Fridays</p>
+                <VenueCard venue={bmc} />
+              </div>
             </div>
           </div>
         </div>
@@ -164,13 +206,11 @@ function FrameworkRow({
   icon,
   label,
   value,
-  href,
   last = false,
 }: {
   icon: SilkIcon;
   label: string;
-  value: string;
-  href?: string;
+  value: ReactNode;
   last?: boolean;
 }) {
   return (
@@ -184,11 +224,7 @@ function FrameworkRow({
         <span style={{ fontVariant: "small-caps" }}>{label}</span>
       </span>
       <span className="mono text-ink text-sm" data-mono>
-        {href ? (
-          <a href={href} className="underline text-dci-teal" rel="noopener noreferrer">{value}</a>
-        ) : (
-          value
-        )}
+        {value}
       </span>
     </div>
   );

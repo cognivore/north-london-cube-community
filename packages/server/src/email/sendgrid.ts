@@ -13,20 +13,29 @@ const TEST_MODE = process.env.TEST_MODE === "true";
 const TEST_REDIRECT_EMAIL = "jm@memorici.de";
 
 /**
- * Look up the active venue so the magic-link footer reflects the current
- * pub instead of a hardcoded one. Falls back to a generic line if no active
- * venue exists (rare — would mean an empty DB).
+ * Venue shown in the magic-link footer. The email isn't tied to a specific
+ * Friday, so we surface the NEXT upcoming Friday's venue (where the next game
+ * is) — correct under the two-venue rotation. Falls back to any active venue,
+ * then a generic line if the DB is empty.
  */
-async function activeVenue(): Promise<{ name: string; address: string; mapUrl: string }> {
+async function footerVenue(): Promise<{ name: string; address: string; mapUrl: string }> {
   try {
     const db = await getDb();
-    const rows = query<{ name: string; address: string; map_url: string }>(db,
+    const upcoming = query<{ name: string; address: string; map_url: string }>(db,
+      `SELECT v.name, v.address, v.map_url
+         FROM fridays f JOIN venues v ON v.id = f.venue_id
+        WHERE f.date >= date('now')
+        ORDER BY f.date ASC LIMIT 1`);
+    if (upcoming[0]) {
+      return { name: upcoming[0].name, address: upcoming[0].address ?? "", mapUrl: upcoming[0].map_url ?? "" };
+    }
+    const active = query<{ name: string; address: string; map_url: string }>(db,
       "SELECT name, address, map_url FROM venues WHERE active = 1 ORDER BY name LIMIT 1");
-    if (rows[0]) {
-      return { name: rows[0].name, address: rows[0].address ?? "", mapUrl: rows[0].map_url ?? "" };
+    if (active[0]) {
+      return { name: active[0].name, address: active[0].address ?? "", mapUrl: active[0].map_url ?? "" };
     }
   } catch (e) {
-    console.warn("activeVenue() lookup failed; using generic footer", e);
+    console.warn("footerVenue() lookup failed; using generic footer", e);
   }
   return { name: "our venue", address: "North London", mapUrl: "" };
 }
@@ -53,7 +62,7 @@ export async function sendMagicLinkEmail(
   const magicLink = `${APP_URL}/auth/verify?userId=${userId}&token=${token}`;
   const cocUrl = `${APP_URL}/code-of-conduct`;
   const actualTo = TEST_MODE ? TEST_REDIRECT_EMAIL : to;
-  const venue = await activeVenue();
+  const venue = await footerVenue();
   const venueLink = venue.mapUrl
     ? `<a href="${venue.mapUrl}" style="color: #f59e0b; text-decoration: underline;">${venue.name}</a>`
     : venue.name;
@@ -109,7 +118,7 @@ export async function sendMagicLinkEmail(
   </p>
 ${cocHtml}
   <p style="color: #525252; font-size: 12px; margin-top: 40px; border-top: 1px solid #262626; padding-top: 16px;">
-    ${venueLink}${venueAddrSuffix} &middot; Doors 18:30 &middot; P1P1 18:45
+    ${venueLink}${venueAddrSuffix} &middot; Doors 18:00 &middot; P1P1 18:30
   </p>
 </body>
 </html>`,

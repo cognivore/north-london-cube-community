@@ -29,6 +29,7 @@ import {
   CubeRepo, VenueRepo, PodRepo, SeatRepo, RoundRepo, MatchRepo, UserRepo, RsvpRepo,
 } from "../repos/types.js";
 import type { RepoError } from "../repos/types.js";
+import { venueIdForDate } from "../venue-rotation.js";
 
 // ---------------------------------------------------------------------------
 // Errors
@@ -47,7 +48,7 @@ export type FridayLifecycleError =
 // Create a new Friday
 // ---------------------------------------------------------------------------
 
-export const createFriday = (input: { date: string; venueId: string }) =>
+export const createFriday = (input: { date: string; venueId?: string }) =>
   Effect.gen(function* () {
     const clock = yield* Clock;
     const rng = yield* RNG;
@@ -55,7 +56,13 @@ export const createFriday = (input: { date: string; venueId: string }) =>
     const fridayRepo = yield* FridayRepo;
     const venueRepo = yield* VenueRepo;
 
-    const venue = yield* venueRepo.findById(input.venueId as any);
+    // Venue is auto-assigned from the odd/even rotation unless one is supplied
+    // explicitly (e.g. a coordinator override).
+    const venueId =
+      input.venueId && input.venueId.length > 0
+        ? input.venueId
+        : venueIdForDate(input.date);
+    const venue = yield* venueRepo.findById(venueId as any);
     if (!venue) {
       return yield* Effect.fail<FridayLifecycleError>({ kind: "venue_not_found" });
     }

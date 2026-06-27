@@ -30,6 +30,11 @@ import {
   unsafeTeamId,
 } from "@cubehall/core";
 import type { TeamId as TeamIdT } from "@cubehall/core";
+import { VENUE_ROTATION_ANCHOR } from "@cubehall/core";
+import {
+  ARCADIA_SEED, BMC_SEED, ARCADIA_VENUE_ID, BMC_VENUE_ID,
+  LEGACY_OWL_NAME, venueIdForDate, type VenueSeed,
+} from "../venue-rotation.js";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -1323,20 +1328,24 @@ const EventOutboxRepoLive = Layer.succeed(EventOutboxRepo, {
 // Seed functions
 // ---------------------------------------------------------------------------
 
-/** Seed default venue (Owl & Hitchhiker) if none exist. */
+/** Insert one rotation venue row from its seed. */
+function insertVenueSeed(db: Awaited<ReturnType<typeof getDb>>, s: VenueSeed): void {
+  run(db,
+    `INSERT INTO venues (id, name, address, capacity, max_pods, house_credit_per_player, active, map_url)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    [s.id, s.name, s.address, s.capacity, s.maxPods, s.houseCreditPerPlayer, s.active, s.mapUrl],
+  );
+}
+
+/** Seed both rotation venues (Arcadia Games + BMC Holloway Road) on a fresh DB. */
 export const seedVenues = Effect.tryPromise({
   try: async () => {
     const db = await getDb();
-    const existing = query<VenueRow>(db, "SELECT * FROM venues", []);
+    const existing = query<VenueRow>(db, "SELECT id FROM venues", []);
     if (existing.length > 0) return;
 
-    run(db,
-      `INSERT INTO venues (id, name, address, capacity, max_pods, house_credit_per_player, active, map_url)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      ["d0000000-0000-0000-0000-000000000001", "The Owl & Hitchhiker",
-       "471 Holloway Rd, Archway, London N7 6LE", 16, 2, 700, 1,
-       "https://maps.app.goo.gl/ae9BhBH59TWZ5uu99"],
-    );
+    insertVenueSeed(db, ARCADIA_SEED);
+    insertVenueSeed(db, BMC_SEED);
     persist();
   },
   catch: dbError,
@@ -1396,43 +1405,77 @@ export const seedInviteCode = Effect.tryPromise({
 
 export async function seed(): Promise<void> {
   await Effect.runPromise(seedVenues);
-  await migrateMergeVenues();
+  await migrateToTwoVenues();
   await Effect.runPromise(seedByeUser);
   await Effect.runPromise(seedInviteCode);
   await seedCoordinator();
 }
 
 /**
- * Idempotent fixup: the DB historically had two venues ("The Hitchhiker" and
- * "The Owl") with Palmers Green addresses. There is only one canonical pub —
- * The Owl & Hitchhiker on Holloway Rd. This collapses any legacy duplicates
- * into the canonical row, and backfills the canonical map_url if missing.
- * Coordinator-edited fields (name / address / capacity / etc.) are never
- * overwritten — venues are now editable via the admin UI.
+ * Idempotent migration to the two-venue rotation (Arcadia Games on odd Fridays,
+ * BMC Holloway Road on even Fridays).
+ *
+ *  1. Ensure both rotation venue rows exist. The legacy single venue
+ *     ("The Owl & Hitchhiker", id …0001) is converted in place into Arcadia so
+ *     existing fridays keep their FK. BMC (…0002) is inserted if missing, or
+ *     converted from a stale legacy row. Rows a coordinator has since renamed
+ *     are left untouched (edits win).
+ *  2. ONE-TIME backfill: re-point already-created future fridays (anchor date
+ *     onward, still scheduled/open) onto the rotation-correct venue, guarded by
+ *     a settings flag so it never clobbers a later manual venue override.
+ *
+ * New fridays are auto-assigned at creation time via venueIdForDate(), so this
+ * only needs to fix fridays that predate the feature.
  */
-async function migrateMergeVenues(): Promise<void> {
+async function migrateToTwoVenues(): Promise<void> {
   const db = await getDb();
-  const PRIMARY_ID = "d0000000-0000-0000-0000-000000000001";
-  const SECONDARY_ID = "d0000000-0000-0000-0000-000000000002";
-  const CANONICAL_MAP_URL = "https://maps.app.goo.gl/ae9BhBH59TWZ5uu99";
-
-  const venues = query<{ id: string; map_url: string }>(db,
-    "SELECT id, map_url FROM venues", []);
-  const primary = venues.find(v => v.id === PRIMARY_ID);
-  const secondary = venues.find(v => v.id === SECONDARY_ID);
-
   let dirty = false;
 
-  if (secondary) {
-    run(db, "UPDATE fridays SET venue_id = ? WHERE venue_id = ?",
-      [PRIMARY_ID, SECONDARY_ID]);
-    run(db, "DELETE FROM venues WHERE id = ?", [SECONDARY_ID]);
+  const venues = query<{ id: string; name: string }>(db, "SELECT id, name FROM venues", []);
+  const arcadia = venues.find(v => v.id === ARCADIA_VENUE_ID);
+  const bmc = venues.find(v => v.id === BMC_VENUE_ID);
+
+  // Arcadia (…0001): insert if missing, or convert the legacy Owl row in place.
+  if (!arcadia) {
+    insertVenueSeed(db, ARCADIA_SEED);
+    dirty = true;
+  } else if (arcadia.name === LEGACY_OWL_NAME) {
+    run(db, "UPDATE venues SET name = ?, address = ?, map_url = ? WHERE id = ?",
+      [ARCADIA_SEED.name, ARCADIA_SEED.address, ARCADIA_SEED.mapUrl, ARCADIA_VENUE_ID]);
     dirty = true;
   }
 
-  if (primary && (!primary.map_url || primary.map_url.length === 0)) {
-    run(db, "UPDATE venues SET map_url = ? WHERE id = ?",
-      [CANONICAL_MAP_URL, PRIMARY_ID]);
+  // BMC (…0002): insert if missing, or convert a stale legacy row. Never
+  // overwrite a row that already carries the BMC name (coordinator edits stay).
+  if (!bmc) {
+    insertVenueSeed(db, BMC_SEED);
+    dirty = true;
+  } else if (bmc.name === LEGACY_OWL_NAME || bmc.name === "The Owl" || bmc.name === "The Hitchhiker") {
+    run(db, "UPDATE venues SET name = ?, address = ?, map_url = ? WHERE id = ?",
+      [BMC_SEED.name, BMC_SEED.address, BMC_SEED.mapUrl, BMC_VENUE_ID]);
+    dirty = true;
+  }
+
+  // One-time backfill of existing future fridays onto the rotation.
+  const BACKFILL_FLAG = "venue_rotation_backfilled";
+  const already = query<{ value: string }>(db,
+    "SELECT value FROM settings WHERE key = ?", [BACKFILL_FLAG]);
+  if (already.length === 0) {
+    const fridays = query<{ id: string; date: string; venue_id: string; state: string }>(db,
+      "SELECT id, date, venue_id, state FROM fridays WHERE date >= ?", [VENUE_ROTATION_ANCHOR]);
+    for (const f of fridays) {
+      const st = f.state ?? "";
+      const open = st.includes('"kind":"scheduled"') || st.includes('"kind":"open"');
+      if (!open) continue;
+      const want = venueIdForDate(f.date);
+      if (f.venue_id !== want) {
+        run(db, "UPDATE fridays SET venue_id = ? WHERE id = ?", [want, f.id]);
+        dirty = true;
+      }
+    }
+    run(db,
+      "INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES (?, ?, ?)",
+      [BACKFILL_FLAG, "1", new Date().toISOString()]);
     dirty = true;
   }
 

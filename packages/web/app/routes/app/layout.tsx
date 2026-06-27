@@ -96,7 +96,7 @@ export default function AppLayout() {
             ) : (
               <span>Cubehall</span>
             )}
-            {" "}&middot; Doors <span className="mono" data-mono>18:30</span> &middot; P1P1 <span className="mono" data-mono>18:45</span> &middot; <span className="mono" data-mono>£7</span>
+            {" "}&middot; Doors <span className="mono" data-mono>18:00</span> &middot; P1P1 <span className="mono" data-mono>18:30</span> &middot; <span className="mono" data-mono>£7</span>
           </span>
           {nextFriday && (
             <Link

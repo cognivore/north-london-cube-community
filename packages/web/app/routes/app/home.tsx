@@ -6,10 +6,9 @@ const API_BASE = SERVER_API_BASE;
 
 export async function loader({ request }: { request: Request }) {
   const ch = { headers: cookieHeader(request) };
-  const [fridaysResult, meResult, venuesResult] = await Promise.all([
+  const [fridaysResult, meResult] = await Promise.all([
     api.listFridays(ch),
     api.me(ch),
-    api.listVenues(),
   ]);
   const fridays = fridaysResult.ok ? fridaysResult.data.fridays : [];
 
@@ -28,9 +27,8 @@ export async function loader({ request }: { request: Request }) {
   );
 
   const user = meResult.ok ? meResult.data.user : null;
-  const venues = venuesResult.ok ? venuesResult.data.venues : [];
 
-  return { fridays: enriched, user, venues };
+  return { fridays: enriched, user };
 }
 
 export async function action({ request }: { request: Request }) {
@@ -45,11 +43,11 @@ export async function action({ request }: { request: Request }) {
     if (day !== 5) {
       return { error: "That's not a Friday!" };
     }
-    const venueId = formData.get("venueId") as string;
+    // Venue is auto-assigned server-side from the odd/even rotation.
     const res = await fetch(`${API_BASE}/api/lifecycle/fridays`, {
       method: "POST",
       headers: { "Content-Type": "application/json", ...ch },
-      body: JSON.stringify({ date, venueId }),
+      body: JSON.stringify({ date }),
     });
     if (!res.ok) return { error: "Failed to create Friday" };
     return { success: `Friday ${date} created!` };
@@ -70,7 +68,7 @@ export async function action({ request }: { request: Request }) {
 }
 
 export default function AppHome() {
-  const { fridays, user, venues } = useLoaderData<typeof loader>();
+  const { fridays, user } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
   const isCoordinator = user?.role === "coordinator";
   const nextFriday = fridays[0];
@@ -98,7 +96,7 @@ export default function AppHome() {
         <Form method="post" className="rounded-sm border border-rule bg-paper-alt p-4">
           <input type="hidden" name="intent" value="create-friday" />
           <h2 className="text-sm font-semibold text-ink-soft">Add a Friday <span className="font-normal text-ink-faint">(must be a Friday)</span></h2>
-          <input type="hidden" name="venueId" value={venues[0]?.id ?? ""} />
+          <p className="mt-1 text-xs text-ink-faint">Venue is auto-assigned: odd Fridays → Arcadia Games, even Fridays → BMC Holloway Road.</p>
           <div className="mt-2 flex gap-2 items-end">
             <div className="flex-1">
               <label className="block text-xs text-ink-faint">Date</label>

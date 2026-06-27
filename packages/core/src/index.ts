@@ -60,4 +60,5 @@ export { packPods } from "./engine/pod-packer.js";
 export type { PackPodsInput, PackPodsError } from "./engine/pod-packer.js";
 export { selectCubesByRecency, decidePodCount } from "./engine/cube-selection.js";
 export type { CubeSelectionResult } from "./engine/cube-selection.js";
+export { venueRotationIndex, VENUE_ROTATION_ANCHOR } from "./engine/venue-rotation.js";
 export { computeStandings, computeTeamScore } from "./engine/scoring.js";
