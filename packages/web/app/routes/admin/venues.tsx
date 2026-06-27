@@ -1,8 +1,6 @@
 import { Form, useLoaderData, useActionData, useSearchParams } from "react-router";
 import { cookieHeader, SERVER_API_BASE } from "../../lib/api";
 
-const CANONICAL_VENUE_ID = "d0000000-0000-0000-0000-000000000001";
-
 type AdminVenue = {
   id: string;
   name: string;
@@ -194,7 +192,6 @@ export default function AdminVenues() {
             <tbody>
               {venues.map((v) => {
                 const isEditing = editingId === v.id;
-                const isCanonical = v.id === CANONICAL_VENUE_ID;
                 if (isEditing) {
                   return (
                     <tr key={v.id} className="border-b border-ink-faint/10 bg-paper">
@@ -234,9 +231,6 @@ export default function AdminVenues() {
                   <tr key={v.id} className={`border-b border-ink-faint/10 last:border-0 ${v.active ? "" : "opacity-60"}`}>
                     <td className="px-3 py-2 text-ink">
                       {v.name}
-                      {isCanonical && (
-                        <span className="ml-2 inline-block rounded-sm bg-amber-soft px-1.5 py-0.5 text-xs text-amber">canonical</span>
-                      )}
                       <div className="text-xs text-ink-faint">{v.address}</div>
                       {v.mapUrl && (
                         <a
@@ -257,30 +251,28 @@ export default function AdminVenues() {
                     </td>
                     <td className="px-3 py-2 text-right">
                       <div className="flex items-center justify-end gap-3">
-                        {!isCanonical && (
-                          v.active ? (
-                            <Form method="post" className="inline">
-                              <input type="hidden" name="intent" value="archive" />
-                              <input type="hidden" name="venueId" value={v.id} />
-                              <button
-                                type="submit"
-                                className="text-xs text-amber hover:underline"
-                              >
-                                archive
-                              </button>
-                            </Form>
-                          ) : (
-                            <Form method="post" className="inline">
-                              <input type="hidden" name="intent" value="restore" />
-                              <input type="hidden" name="venueId" value={v.id} />
-                              <button
-                                type="submit"
-                                className="text-xs text-ok hover:underline"
-                              >
-                                restore
-                              </button>
-                            </Form>
-                          )
+                        {v.active ? (
+                          <Form method="post" className="inline">
+                            <input type="hidden" name="intent" value="archive" />
+                            <input type="hidden" name="venueId" value={v.id} />
+                            <button
+                              type="submit"
+                              className="text-xs text-amber hover:underline"
+                            >
+                              archive
+                            </button>
+                          </Form>
+                        ) : (
+                          <Form method="post" className="inline">
+                            <input type="hidden" name="intent" value="restore" />
+                            <input type="hidden" name="venueId" value={v.id} />
+                            <button
+                              type="submit"
+                              className="text-xs text-ok hover:underline"
+                            >
+                              restore
+                            </button>
+                          </Form>
                         )}
                         <button
                           type="button"

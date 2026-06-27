@@ -1,23 +1,24 @@
 /**
- * Maps the pure core rotation (venueRotationIndex) onto concrete venue ids,
- * and holds the canonical seed data for the two rotation venues. Both the
- * startup seed and the idempotent migration import these so there is exactly
- * one source of truth for venue identity + details.
+ * Maps the pure core rotation (venueRotationIndex) onto the two real,
+ * coordinator-created venues, and holds their seed data for fresh installs.
+ * One source of truth for venue identity so seed + migration agree.
  *
  *   odd  Fridays (index 0) → Arcadia Games
- *   even Fridays (index 1) → BMC Holloway Road
+ *   even Fridays (index 1) → Bad Moon Cafe (Holloway Rd)  ("BMC")
+ *
+ * These ids are the real venue rows that already exist in production; never
+ * duplicate them.
  */
 
 import { venueRotationIndex } from "@cubehall/core";
 
-/** Odd Fridays. Reuses the historical canonical id so existing fridays + the
- *  landing page's canonical lookup keep resolving. */
-export const ARCADIA_VENUE_ID = "d0000000-0000-0000-0000-000000000001";
-/** Even Fridays. */
-export const BMC_VENUE_ID = "d0000000-0000-0000-0000-000000000002";
+/** Odd Fridays — Arcadia Games, Temple. */
+export const ARCADIA_VENUE_ID = "65b5de32-cbb2-44a9-a254-0c0b9cd20849";
+/** Even Fridays — Bad Moon Cafe on Holloway Rd ("BMC"). */
+export const BAD_MOON_VENUE_ID = "bf396686-777e-4dff-ac15-4eee93eb493e";
 
 /** index → venue id. Order matches venueRotationIndex (0 = odd, 1 = even). */
-export const ROTATION_VENUE_IDS = [ARCADIA_VENUE_ID, BMC_VENUE_ID] as const;
+export const ROTATION_VENUE_IDS = [ARCADIA_VENUE_ID, BAD_MOON_VENUE_ID] as const;
 
 export type VenueSeed = {
   readonly id: string;
@@ -33,30 +34,27 @@ export type VenueSeed = {
 export const ARCADIA_SEED: VenueSeed = {
   id: ARCADIA_VENUE_ID,
   name: "Arcadia Games",
-  address: "46-48 Essex Street, Temple, London WC2R 3JF",
+  address: "46 Essex St., Temple, London WC2R 3JF",
+  capacity: 8,
+  maxPods: 1,
+  houseCreditPerPlayer: 1400,
+  active: 1,
+  mapUrl: "https://maps.app.goo.gl/ZuBqaM4FWVjNGm84A",
+};
+
+export const BAD_MOON_SEED: VenueSeed = {
+  id: BAD_MOON_VENUE_ID,
+  name: "Bad Moon Cafe (Holloway Rd)",
+  address: "Arch 5, 303 Holloway Rd, London N7 8HS",
   capacity: 16,
   maxPods: 2,
   houseCreditPerPlayer: 700,
   active: 1,
-  mapUrl:
-    "https://www.google.com/maps/search/?api=1&query=Arcadia%20Games%2046-48%20Essex%20Street%20London%20WC2R%203JF",
+  mapUrl: "https://maps.app.goo.gl/49t27kY8y69MBvtZA",
 };
 
-export const BMC_SEED: VenueSeed = {
-  id: BMC_VENUE_ID,
-  name: "BMC Holloway Road",
-  // Exact street address + map link TBC — fill in via the admin venue editor
-  // (or update this seed). Templates/landing degrade gracefully when blank.
-  address: "",
-  capacity: 16,
-  maxPods: 2,
-  houseCreditPerPlayer: 700,
-  active: 1,
-  mapUrl: "",
-};
-
-/** The legacy single-venue name we convert into Arcadia on migration. */
-export const LEGACY_OWL_NAME = "The Owl & Hitchhiker";
+/** Both rotation venues, in slot order. */
+export const ROTATION_SEEDS: ReadonlyArray<VenueSeed> = [ARCADIA_SEED, BAD_MOON_SEED];
 
 /** Which venue id a Friday on `date` (YYYY-MM-DD) plays at, per the rotation. */
 export function venueIdForDate(date: string): string {

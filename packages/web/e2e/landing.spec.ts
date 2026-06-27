@@ -35,7 +35,7 @@ test.describe("Landing page", () => {
       page.getByRole("heading", { name: "Arcadia Games" }),
     ).toBeVisible();
     await expect(
-      page.getByRole("heading", { name: "BMC Holloway Road" }),
+      page.getByRole("heading", { name: "Bad Moon Cafe (Holloway Rd)" }),
     ).toBeVisible();
     // Each venue is tagged with which Fridays it hosts.
     await expect(page.getByText("Odd Fridays").first()).toBeVisible();

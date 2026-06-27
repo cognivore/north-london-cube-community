@@ -96,7 +96,7 @@ export default function AppHome() {
         <Form method="post" className="rounded-sm border border-rule bg-paper-alt p-4">
           <input type="hidden" name="intent" value="create-friday" />
           <h2 className="text-sm font-semibold text-ink-soft">Add a Friday <span className="font-normal text-ink-faint">(must be a Friday)</span></h2>
-          <p className="mt-1 text-xs text-ink-faint">Venue is auto-assigned: odd Fridays → Arcadia Games, even Fridays → BMC Holloway Road.</p>
+          <p className="mt-1 text-xs text-ink-faint">Venue is auto-assigned: odd Fridays → Arcadia Games, even Fridays → Bad Moon Cafe (Holloway Rd).</p>
           <div className="mt-2 flex gap-2 items-end">
             <div className="flex-1">
               <label className="block text-xs text-ink-faint">Date</label>

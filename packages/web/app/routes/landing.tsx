@@ -7,22 +7,21 @@ import { VenueCard } from "../components/venue-card";
 import type { VenueCardData } from "../components/venue-card";
 import { api, cookieHeader } from "../lib/api";
 
-// Two-venue rotation: odd Fridays at Arcadia Games (…0001), even Fridays at
-// BMC Holloway Road (…0002). Ids mirror packages/server/src/venue-rotation.ts.
-const ARCADIA_VENUE_ID = "d0000000-0000-0000-0000-000000000001";
-const BMC_VENUE_ID = "d0000000-0000-0000-0000-000000000002";
+// Two-venue rotation: odd Fridays at Arcadia Games, even Fridays at Bad Moon
+// Cafe ("BMC") on Holloway Rd. Ids mirror packages/server/src/venue-rotation.ts.
+const ARCADIA_VENUE_ID = "65b5de32-cbb2-44a9-a254-0c0b9cd20849";
+const BAD_MOON_VENUE_ID = "bf396686-777e-4dff-ac15-4eee93eb493e";
 
 // SSR fallbacks if the venues aren't in the DB yet (degrades gracefully).
 const ARCADIA_FALLBACK: VenueCardData = {
   name: "Arcadia Games",
-  address: "46-48 Essex Street, Temple, London WC2R 3JF",
-  mapUrl:
-    "https://www.google.com/maps/search/?api=1&query=Arcadia%20Games%2046-48%20Essex%20Street%20London%20WC2R%203JF",
+  address: "46 Essex St., Temple, London WC2R 3JF",
+  mapUrl: "https://maps.app.goo.gl/ZuBqaM4FWVjNGm84A",
 };
-const BMC_FALLBACK: VenueCardData = {
-  name: "BMC Holloway Road",
-  address: "",
-  mapUrl: "",
+const BAD_MOON_FALLBACK: VenueCardData = {
+  name: "Bad Moon Cafe (Holloway Rd)",
+  address: "Arch 5, 303 Holloway Rd, London N7 8HS",
+  mapUrl: "https://maps.app.goo.gl/49t27kY8y69MBvtZA",
 };
 
 export async function loader({ request }: { request: Request }) {
@@ -31,20 +30,20 @@ export async function loader({ request }: { request: Request }) {
   const venuesRes = await api.listVenues();
   const venues = venuesRes.ok ? venuesRes.data.venues : [];
   const byId = (id: string) => venues.find((v: any) => v.id === id) ?? null;
-  return { arcadia: byId(ARCADIA_VENUE_ID), bmc: byId(BMC_VENUE_ID) };
+  return { arcadia: byId(ARCADIA_VENUE_ID), badMoon: byId(BAD_MOON_VENUE_ID) };
 }
 
 export const meta: MetaFunction = () => [
   { title: "North London Cube Community" },
-  { name: "description", content: "Weekly MTG cube drafts every Friday in North London — odd weeks at Arcadia Games (Temple), even weeks at BMC on Holloway Road. No committee, no gatekeeping — just show up and draft." },
+  { name: "description", content: "Weekly MTG cube drafts every Friday in North London — odd weeks at Arcadia Games (Temple), even weeks at Bad Moon Cafe on Holloway Road. No committee, no gatekeeping — just show up and draft." },
   { property: "og:title", content: "North London Cube Community" },
-  { property: "og:description", content: "Weekly MTG cube drafts every Friday in North London — Arcadia Games (odd weeks) & BMC, Holloway Road (even weeks)." },
+  { property: "og:description", content: "Weekly MTG cube drafts every Friday in North London — Arcadia Games (odd weeks) & Bad Moon Cafe, Holloway Rd (even weeks)." },
   { property: "og:image", content: "https://north.cube.london/og.png" },
   { property: "og:type", content: "website" },
   { property: "og:url", content: "https://north.cube.london" },
   { name: "twitter:card", content: "summary_large_image" },
   { name: "twitter:title", content: "North London Cube Community" },
-  { name: "twitter:description", content: "Weekly MTG cube drafts every Friday in North London — Arcadia Games (odd weeks) & BMC, Holloway Road (even weeks)." },
+  { name: "twitter:description", content: "Weekly MTG cube drafts every Friday in North London — Arcadia Games (odd weeks) & Bad Moon Cafe, Holloway Rd (even weeks)." },
   { name: "twitter:image", content: "https://north.cube.london/og.png" },
   { name: "theme-color", content: "#f59e0b" },
 ];
@@ -62,11 +61,11 @@ function venueLink(v: VenueCardData): ReactNode {
 }
 
 export default function Landing() {
-  const data = useLoaderData<typeof loader>() as { arcadia: any | null; bmc: any | null };
+  const data = useLoaderData<typeof loader>() as { arcadia: any | null; badMoon: any | null };
   const toCard = (v: any | null, fallback: VenueCardData): VenueCardData =>
     v ? { name: v.name, address: v.address ?? "", mapUrl: v.mapUrl ?? "" } : fallback;
   const arcadia = toCard(data?.arcadia, ARCADIA_FALLBACK);
-  const bmc = toCard(data?.bmc, BMC_FALLBACK);
+  const badMoon = toCard(data?.badMoon, BAD_MOON_FALLBACK);
 
   return (
     <div className="min-h-dvh flex flex-col bg-paper text-ink">
@@ -123,7 +122,7 @@ export default function Landing() {
               There is no committee, no membership fee, no gatekeeping.
               Anyone can bring a cube. Anyone can show up and play.
               The only thing that's fixed is the framework: every Friday,
-              same time, rotating between Arcadia Games and BMC on Holloway Road.
+              same time, rotating between Arcadia Games and Bad Moon Cafe on Holloway Road.
               We follow a{" "}
               <a href="/code-of-conduct" className="text-dci-teal underline">Code of Conduct</a>{" "}
               based on the{" "}
@@ -140,7 +139,7 @@ export default function Landing() {
                 value={
                   <span className="block space-y-0.5">
                     <span className="block">{venueLink(arcadia)} <span className="text-ink-faint">— odd Fridays</span></span>
-                    <span className="block">{venueLink(bmc)} <span className="text-ink-faint">— even Fridays</span></span>
+                    <span className="block">{venueLink(badMoon)} <span className="text-ink-faint">— even Fridays</span></span>
                   </span>
                 }
               />
@@ -176,7 +175,7 @@ export default function Landing() {
               </div>
               <div>
                 <p className="mb-1 text-xs uppercase tracking-wider text-ink-faint" style={{ fontVariant: "small-caps" }}>Even Fridays</p>
-                <VenueCard venue={bmc} />
+                <VenueCard venue={badMoon} />
               </div>
             </div>
           </div>

@@ -31,10 +31,7 @@ import {
 } from "@cubehall/core";
 import type { TeamId as TeamIdT } from "@cubehall/core";
 import { VENUE_ROTATION_ANCHOR } from "@cubehall/core";
-import {
-  ARCADIA_SEED, BMC_SEED, ARCADIA_VENUE_ID, BMC_VENUE_ID,
-  LEGACY_OWL_NAME, venueIdForDate, type VenueSeed,
-} from "../venue-rotation.js";
+import { ROTATION_SEEDS, venueIdForDate, type VenueSeed } from "../venue-rotation.js";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -1337,15 +1334,14 @@ function insertVenueSeed(db: Awaited<ReturnType<typeof getDb>>, s: VenueSeed): v
   );
 }
 
-/** Seed both rotation venues (Arcadia Games + BMC Holloway Road) on a fresh DB. */
+/** Seed both rotation venues (Arcadia Games + Bad Moon Cafe) on a fresh DB. */
 export const seedVenues = Effect.tryPromise({
   try: async () => {
     const db = await getDb();
     const existing = query<VenueRow>(db, "SELECT id FROM venues", []);
     if (existing.length > 0) return;
 
-    insertVenueSeed(db, ARCADIA_SEED);
-    insertVenueSeed(db, BMC_SEED);
+    for (const s of ROTATION_SEEDS) insertVenueSeed(db, s);
     persist();
   },
   catch: dbError,
@@ -1412,58 +1408,58 @@ export async function seed(): Promise<void> {
 }
 
 /**
- * Idempotent migration to the two-venue rotation (Arcadia Games on odd Fridays,
- * BMC Holloway Road on even Fridays).
+ * Idempotent migration for the two-venue rotation (Arcadia Games on odd
+ * Fridays, Bad Moon Cafe on even Fridays). Both are real coordinator-created
+ * venue rows; this only (a) seeds them on a fresh DB and (b) undoes the damage
+ * from an earlier deploy that — assuming a single "Owl & Hitchhiker" venue —
+ * clobbered the Owl row (…0001) into a synthetic "Arcadia Games" and seeded a
+ * blank duplicate "BMC Holloway Road" (…0002).
  *
- *  1. Ensure both rotation venue rows exist. The legacy single venue
- *     ("The Owl & Hitchhiker", id …0001) is converted in place into Arcadia so
- *     existing fridays keep their FK. BMC (…0002) is inserted if missing, or
- *     converted from a stale legacy row. Rows a coordinator has since renamed
- *     are left untouched (edits win).
- *  2. ONE-TIME backfill: re-point already-created future fridays (anchor date
- *     onward, still scheduled/open) onto the rotation-correct venue, guarded by
- *     a settings flag so it never clobbers a later manual venue override.
- *
- * New fridays are auto-assigned at creation time via venueIdForDate(), so this
- * only needs to fix fridays that predate the feature.
+ * New fridays auto-assign their venue at creation via venueIdForDate(), so this
+ * only fixes data that predates the rotation.
  */
 async function migrateToTwoVenues(): Promise<void> {
   const db = await getDb();
   let dirty = false;
 
-  const venues = query<{ id: string; name: string }>(db, "SELECT id, name FROM venues", []);
-  const arcadia = venues.find(v => v.id === ARCADIA_VENUE_ID);
-  const bmc = venues.find(v => v.id === BMC_VENUE_ID);
+  const venues = query<{ id: string; name: string; address: string }>(db,
+    "SELECT id, name, address FROM venues", []);
 
-  // Arcadia (…0001): insert if missing, or convert the legacy Owl row in place.
-  if (!arcadia) {
-    insertVenueSeed(db, ARCADIA_SEED);
-    dirty = true;
-  } else if (arcadia.name === LEGACY_OWL_NAME) {
-    run(db, "UPDATE venues SET name = ?, address = ?, map_url = ? WHERE id = ?",
-      [ARCADIA_SEED.name, ARCADIA_SEED.address, ARCADIA_SEED.mapUrl, ARCADIA_VENUE_ID]);
+  // 1. Ensure the two real rotation venues exist (fresh installs / safety net).
+  for (const s of ROTATION_SEEDS) {
+    if (!venues.some(v => v.id === s.id)) {
+      insertVenueSeed(db, s);
+      dirty = true;
+    }
+  }
+
+  // 2. Undo the earlier deploy's clobber of the legacy Owl row. Restore Owl &
+  //    Hitchhiker (kept inactive — the community left it) so historical fridays
+  //    still read right. Only fires when …0001 still carries that exact
+  //    synthetic signature, so it's safe + idempotent.
+  const SYN_ARCADIA_ID = "d0000000-0000-0000-0000-000000000001";
+  const SYN_BMC_ID = "d0000000-0000-0000-0000-000000000002";
+  const SYN_ARCADIA_ADDR = "46-48 Essex Street, Temple, London WC2R 3JF";
+  const syn0001 = venues.find(v => v.id === SYN_ARCADIA_ID);
+  if (syn0001 && syn0001.name === "Arcadia Games" && syn0001.address === SYN_ARCADIA_ADDR) {
+    run(db,
+      "UPDATE venues SET name = ?, address = ?, map_url = ?, active = 0 WHERE id = ?",
+      ["The Owl & Hitchhiker", "471 Holloway Rd, Archway, London N7 6LE",
+       "https://maps.app.goo.gl/ae9BhBH59TWZ5uu99", SYN_ARCADIA_ID],
+    );
     dirty = true;
   }
 
-  // BMC (…0002): insert if missing, or convert a stale legacy row. Never
-  // overwrite a row that already carries the BMC name (coordinator edits stay).
-  if (!bmc) {
-    insertVenueSeed(db, BMC_SEED);
-    dirty = true;
-  } else if (bmc.name === LEGACY_OWL_NAME || bmc.name === "The Owl" || bmc.name === "The Hitchhiker") {
-    run(db, "UPDATE venues SET name = ?, address = ?, map_url = ? WHERE id = ?",
-      [BMC_SEED.name, BMC_SEED.address, BMC_SEED.mapUrl, BMC_VENUE_ID]);
-    dirty = true;
-  }
-
-  // One-time backfill of existing future fridays onto the rotation.
-  const BACKFILL_FLAG = "venue_rotation_backfilled";
-  const already = query<{ value: string }>(db,
-    "SELECT value FROM settings WHERE key = ?", [BACKFILL_FLAG]);
-  if (already.length === 0) {
-    const fridays = query<{ id: string; date: string; venue_id: string; state: string }>(db,
-      "SELECT id, date, venue_id, state FROM fridays WHERE date >= ?", [VENUE_ROTATION_ANCHOR]);
-    for (const f of fridays) {
+  // 3. One-time: re-point fridays the earlier deploy mis-aimed at the synthetic
+  //    rows onto the real Arcadia / Bad Moon venues, then drop the blank …0002.
+  const CLEANUP_FLAG = "venue_rotation_real_v2";
+  const done = query<{ value: string }>(db,
+    "SELECT value FROM settings WHERE key = ?", [CLEANUP_FLAG]);
+  if (done.length === 0) {
+    const mis = query<{ id: string; date: string; venue_id: string; state: string }>(db,
+      "SELECT id, date, venue_id, state FROM fridays WHERE venue_id IN (?, ?) AND date >= ?",
+      [SYN_ARCADIA_ID, SYN_BMC_ID, VENUE_ROTATION_ANCHOR]);
+    for (const f of mis) {
       const st = f.state ?? "";
       const open = st.includes('"kind":"scheduled"') || st.includes('"kind":"open"');
       if (!open) continue;
@@ -1473,9 +1469,20 @@ async function migrateToTwoVenues(): Promise<void> {
         dirty = true;
       }
     }
+
+    // Delete the synthetic blank BMC row once nothing references it.
+    const refs = query<{ n: number }>(db,
+      "SELECT COUNT(*) AS n FROM fridays WHERE venue_id = ?", [SYN_BMC_ID]);
+    const bmc0002 = venues.find(v => v.id === SYN_BMC_ID);
+    if ((refs[0]?.n ?? 0) === 0 && bmc0002 &&
+        bmc0002.name === "BMC Holloway Road" && (bmc0002.address ?? "") === "") {
+      run(db, "DELETE FROM venues WHERE id = ?", [SYN_BMC_ID]);
+      dirty = true;
+    }
+
     run(db,
       "INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES (?, ?, ?)",
-      [BACKFILL_FLAG, "1", new Date().toISOString()]);
+      [CLEANUP_FLAG, "1", new Date().toISOString()]);
     dirty = true;
   }
 
